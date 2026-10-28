@@ -29,9 +29,10 @@ public sealed class ScanOptions
     /// <summary>
     /// How often, and how far apart, the engine is pinged after a lost connection before the scan
     /// is aborted. A single dropped connection (clamd restarting, a paused console window) then
-    /// costs one retry instead of the whole scan.
+    /// costs one retry instead of the whole scan. 24 x 5 s covers a clamd service that Windows
+    /// restarts after a crash: it needs 20-60 s to load the official signatures.
     /// </summary>
-    public int EngineRecoveryAttempts { get; init; } = 6;
+    public int EngineRecoveryAttempts { get; init; } = 24;
 
     public TimeSpan EngineRecoveryDelay { get; init; } = TimeSpan.FromSeconds(5);
 

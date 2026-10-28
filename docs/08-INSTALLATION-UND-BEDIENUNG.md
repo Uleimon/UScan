@@ -51,6 +51,7 @@ AlertEncrypted yes
 ```powershell
 .\clamd.exe                 # Vordergrund, zum Ausprobieren
 .\clamd.exe --install-service ; Start-Service clamd    # dauerhaft als Windows-Dienst
+sc.exe failure clamd reset= 86400 actions= restart/5000/restart/5000/restart/5000   # nach Absturz neu starten
 ```
 
 `clamd` braucht mit offiziellen Signaturen etwa 1–1,5 GB Arbeitsspeicher und 20–60 s zum Laden.
@@ -143,6 +144,7 @@ Alles liegt in `%LOCALAPPDATA%\UScan`: `reports\` (Scanberichte), `logs\` (Ereig
 
 | Meldung | Ursache / Lösung |
 |---|---|
+| Scan „wegen Engine-Fehler abgebrochen“ | `clamd`-Fenster geschlossen oder `clamd` abgestürzt. `clamd` als Dienst mit Neustart-Option einrichten (Abschnitt 2); die Meldung im Protokoll nennt die Datei, bei der die Verbindung verloren ging |
 | „Scan-Engine NICHT erreichbar“ | `clamd` läuft nicht oder anderer Port. `Get-Service clamd` bzw. Fenster prüfen, Port in `settings.json` |
 | „Keine offizielle Signaturdatenbank erkannt“ | `freshclam` noch nicht gelaufen |
 | „freshclam failed: network connection problem (exit code 52)“ | Internet/Proxy prüfen; Proxy in `freshclam.conf` eintragen |
