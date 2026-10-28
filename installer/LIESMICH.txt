@@ -39,5 +39,5 @@ Windows SmartScreen kann deshalb beim ersten Start warnen
 Daten (Berichte, Quarantäne, Protokoll): %LOCALAPPDATA%\UScan
 Diese bleiben beim Deinstallieren erhalten.
 
-Kommandozeile: uscan.exe status | scan quick | scan full | quarantine list ...
+Kommandozeile: uscan-cli.exe status | scan quick | scan full | quarantine list ...
 Quellcode und Dokumentation: https://github.com/Uleimon/UScan

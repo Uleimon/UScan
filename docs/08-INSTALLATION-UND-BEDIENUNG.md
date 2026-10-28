@@ -8,7 +8,7 @@ Unter [Releases](https://github.com/Uleimon/UScan/releases) gibt es zu jeder Ver
 * `UScan-<Version>-win-x64.zip` – dasselbe zum Entpacken, ohne Installation.
 * `SHA256SUMS.txt` – Prüfsummen.
 
-Beide enthalten `UScan.exe` (Oberfläche), `uscan.exe` (Kommandozeile) und `LIESMICH.txt`. Die .NET-Laufzeit ist eingebaut; **ClamAV ist nicht enthalten** und muss wie in Abschnitt 1–2 eingerichtet werden. Die Dateien sind nicht Authenticode-signiert, Windows SmartScreen kann beim ersten Start warnen.
+Beide enthalten `UScan.exe` (Oberfläche), `uscan-cli.exe` (Kommandozeile; im Paket umbenannt, weil Windows `uscan.exe` und `UScan.exe` nicht unterscheidet) und `LIESMICH.txt`. Die .NET-Laufzeit ist eingebaut; **ClamAV ist nicht enthalten** und muss wie in Abschnitt 1–2 eingerichtet werden. Die Dateien sind nicht Authenticode-signiert, Windows SmartScreen kann beim ersten Start warnen.
 
 Gebaut werden die Pakete von `.github/workflows/release.yml` (bei einem Tag `v*`). Die CI testet dabei das veröffentlichte Programm selbst: Oberflächen-Selbsttest, EICAR-Fund der Kommandozeile mit echtem `clamd`, stille Installation, Start und Deinstallation.
 

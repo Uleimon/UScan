@@ -44,8 +44,11 @@ jobs:
                       '-p:DebugType=none', '-p:GenerateDocumentationFile=false', '-o', 'publish\UScan')
           dotnet publish src\UScan.Desktop @common
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          dotnet publish src\UScan.Cli -f net10.0-windows @common
+          # Windows file names are case-insensitive: uscan.exe would overwrite UScan.exe, so the CLI ships as uscan-cli.exe.
+          $cli = @($common[0..($common.Length - 2)]) + "publish\cli"
+          dotnet publish src\UScan.Cli -f net10.0-windows @cli
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Copy-Item publish\cli\uscan.exe publish\UScan\uscan-cli.exe
           Copy-Item installer\LIESMICH.txt publish\UScan\
           Get-ChildItem publish\UScan | Format-Table Name, Length
 
@@ -77,12 +80,12 @@ jobs:
           [IO.File]::WriteAllText("$work\files\harmlos.txt", "nur Text")
           $ok = $false
           foreach ($i in 1..30) {
-            & publish\UScan\uscan.exe status --data "$work\data" --port 3399 *> $null
+            & publish\UScan\uscan-cli.exe status --data "$work\data" --port 3399 *> $null
             if ($LASTEXITCODE -ne 3) { $ok = $true; break }
             Start-Sleep -Seconds 2
           }
           if (-not $ok) { Stop-Process -Id $daemon.Id; Write-Error "clamd nicht erreichbar"; exit 1 }
-          & publish\UScan\uscan.exe scan "$work\files" --data "$work\data" --port 3399
+          & publish\UScan\uscan-cli.exe scan "$work\files" --data "$work\data" --port 3399
           $code = $LASTEXITCODE
           Stop-Process -Id $daemon.Id
           if (-not (Test-Path "$work\files\eicar.com")) { Write-Error "EICAR-Datei wurde vor dem Scan entfernt (Defender?)"; exit 1 }
