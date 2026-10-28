@@ -1,0 +1,155 @@
+name: Release
+
+# Builds the ready-to-use Windows package (ZIP + setup), tests the published program itself
+# and, for a tag v*, attaches both files to a GitHub release.
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+    paths:
+      - '.github/workflows/release.yml'
+      - 'installer/**'
+      - 'src/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Windows-Paket bauen und testen
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Version bestimmen
+        shell: pwsh
+        run: |
+          $v = ([xml](Get-Content Directory.Build.props)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+          if ($env:GITHUB_REF -like 'refs/tags/v*') {
+            $tag = $env:GITHUB_REF_NAME.Substring(1)
+            if ($tag -ne $v) { Write-Error "Tag v$tag passt nicht zur Version $v in Directory.Build.props"; exit 1 }
+          }
+          "USCAN_VERSION=$v" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "Version $v"
+
+      - name: Eigenständig veröffentlichen (ohne installiertes .NET lauffähig)
+        shell: pwsh
+        run: |
+          $common = @('-c', 'Release', '-r', 'win-x64', '--self-contained', '-p:PublishSingleFile=true',
+                      '-p:IncludeNativeLibrariesForSelfExtract=true', '-p:EnableCompressionInSingleFile=true',
+                      '-p:DebugType=none', '-p:GenerateDocumentationFile=false', '-o', 'publish\UScan')
+          dotnet publish src\UScan.Desktop @common
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          # Windows file names are case-insensitive: uscan.exe would overwrite UScan.exe, so the CLI ships as uscan-cli.exe.
+          $cli = @($common[0..($common.Length - 2)]) + "publish\cli"
+          dotnet publish src\UScan.Cli -f net10.0-windows @cli
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Copy-Item publish\cli\uscan.exe publish\UScan\uscan-cli.exe
+          Copy-Item installer\LIESMICH.txt publish\UScan\
+          Get-ChildItem publish\UScan | Format-Table Name, Length
+
+      - name: Veröffentlichte Oberfläche zeigt jede Seite fehlerfrei an
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path TestResults | Out-Null
+          $p = Start-Process -FilePath "publish\UScan\UScan.exe" -ArgumentList "--ui-selftest" -PassThru -RedirectStandardOutput TestResults\selftest.txt -RedirectStandardError TestResults\selftest-err.txt
+          $done = $p.WaitForExit(120000)
+          if (-not $done) { Stop-Process -Id $p.Id; Start-Sleep -Seconds 1 }
+          Get-Content TestResults\selftest.txt
+          Get-Content TestResults\selftest-err.txt -TotalCount 60
+          if (-not $done) { Write-Error "Selbsttest hängt"; exit 1 }
+          if ($p.ExitCode -ne 0) { Write-Error "Selbsttest fehlgeschlagen (Code $($p.ExitCode))"; exit 1 }
+
+      - name: Veröffentlichte Kommandozeile findet EICAR mit echtem clamd
+        shell: pwsh
+        run: |
+          choco install clamav -y --no-progress
+          $clamd = Get-Item "C:\ProgramData\chocolatey\lib\clamav\tools\clamav-*\clamd.exe" | Select-Object -First 1
+          $work = Join-Path $env:RUNNER_TEMP "uscan-pkg-test"
+          New-Item -ItemType Directory -Force -Path "$work\db", "$work\data", "$work\files" | Out-Null
+          # Test signature only (MD5 of the EICAR test file); no official database is downloaded.
+          "44d88612fea8a8f36de82e1278abb02f:68:Eicar-Test-Signature" | Set-Content -Encoding ascii "$work\db\test.hdb"
+          @("TCPSocket 3399", "TCPAddr 127.0.0.1", "DatabaseDirectory $work\db", "Foreground yes") | Set-Content -Encoding ascii "$work\clamd.conf"
+          $daemon = Start-Process -FilePath $clamd.FullName -ArgumentList "--config-file=$work\clamd.conf" -PassThru
+          $eicar = 'X5O!P%@AP[4\PZX54(P^)7CC)7}$' + 'EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*'
+          [IO.File]::WriteAllText("$work\files\eicar.com", $eicar)
+          [IO.File]::WriteAllText("$work\files\harmlos.txt", "nur Text")
+          $ok = $false
+          foreach ($i in 1..30) {
+            & publish\UScan\uscan-cli.exe status --data "$work\data" --port 3399 *> $null
+            if ($LASTEXITCODE -ne 3) { $ok = $true; break }
+            Start-Sleep -Seconds 2
+          }
+          if (-not $ok) { Stop-Process -Id $daemon.Id; Write-Error "clamd nicht erreichbar"; exit 1 }
+          & publish\UScan\uscan-cli.exe scan "$work\files" --data "$work\data" --port 3399
+          $code = $LASTEXITCODE
+          Stop-Process -Id $daemon.Id
+          if (-not (Test-Path "$work\files\eicar.com")) { Write-Error "EICAR-Datei wurde vor dem Scan entfernt (Defender?)"; exit 1 }
+          if ($code -ne 1) { Write-Error "Erwartet: Exit-Code 1 (Fund), erhalten: $code"; exit 1 }
+          Write-Host "EICAR erkannt, Exit-Code 1"
+          exit 0   # the expected exit code 1 of uscan-cli would otherwise fail the step
+
+      - name: ZIP packen
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Compress-Archive -Path publish\UScan\* -DestinationPath "dist\UScan-$env:USCAN_VERSION-win-x64.zip"
+
+      - name: Setup bauen (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+          & $iscc "/DAppVersion=$env:USCAN_VERSION" "/DSourceDir=$PWD\publish\UScan" "/O$PWD\dist" installer\UScan.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Setup installiert still, Programm startet, Deinstallation entfernt es
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP "UScanInstall"
+          $setup = Get-Item dist\UScan-*-Setup.exe
+          $p = Start-Process $setup.FullName -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/CURRENTUSER", "/DIR=$dir" -PassThru -Wait
+          if ($p.ExitCode -ne 0) { Write-Error "Setup Code $($p.ExitCode)"; exit 1 }
+          if (-not (Test-Path "$dir\UScan.exe")) { Write-Error "UScan.exe nicht installiert"; exit 1 }
+          $t = Start-Process "$dir\UScan.exe" -ArgumentList "--ui-selftest" -PassThru
+          if (-not $t.WaitForExit(120000)) { Stop-Process -Id $t.Id; Write-Error "Selbsttest hängt"; exit 1 }
+          if ($t.ExitCode -ne 0) { Write-Error "Installiertes UScan: Selbsttest Code $($t.ExitCode)"; exit 1 }
+          $u = Start-Process "$dir\unins000.exe" -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES" -PassThru -Wait
+          Start-Sleep -Seconds 3
+          if (Test-Path "$dir\UScan.exe") { Write-Error "Deinstallation hat UScan.exe nicht entfernt"; exit 1 }
+          Write-Host "Installieren, Starten und Deinstallieren ok"
+
+      - name: Prüfsummen
+        shell: pwsh
+        run: |
+          Get-ChildItem dist | ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $_.Name } |
+            Set-Content -Encoding ascii dist\SHA256SUMS.txt
+          Get-Content dist\SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: uscan-windows
+          path: dist
+
+  release:
+    name: GitHub-Release anlegen
+    needs: package
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: uscan-windows
+          path: dist
+      - name: Release mit ZIP, Setup und Prüfsummen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "UScan ${GITHUB_REF_NAME#v}" \
+            --notes "Fertiges Windows-Paket (x64). **UScan-…-Setup.exe** installieren oder die ZIP entpacken und UScan.exe starten. ClamAV muss separat installiert werden – siehe LIESMICH.txt. Die Dateien sind nicht Authenticode-signiert; SmartScreen kann beim ersten Start warnen."

@@ -1,0 +1,43 @@
+UScan – Kurzanleitung
+=====================
+
+UScan prüft Dateien mit der Scan-Engine ClamAV. ClamAV wird NICHT mitgeliefert
+und muss einmalig separat installiert werden:
+
+1. ClamAV für Windows herunterladen: https://www.clamav.net/downloads
+   Wichtig: die Datei mit "win.x64" im Namen (nicht arm64, nicht win32).
+2. PowerShell als Administrator öffnen und im ClamAV-Ordner
+   (Standard: C:\Program Files\ClamAV) nacheinander eingeben:
+
+   copy conf_examples\freshclam.conf.sample freshclam.conf
+   (Get-Content freshclam.conf) -replace '^Example','#Example' | Set-Content freshclam.conf
+   "TCPSocket 3310","TCPAddr 127.0.0.1","StreamMaxLength 100M","MaxFileSize 100M","MaxScanSize 400M","MaxFiles 10000","AlertExceedsMax yes","AlertEncrypted yes" | Set-Content -Encoding ascii clamd.conf
+   .\freshclam.exe
+   .\clamd.exe --install-service
+   Set-Service clamd -StartupType Automatic; Start-Service clamd
+
+3. UScan starten. Die Übersicht zeigt, ob die Engine erreichbar ist und die
+   Signaturen aktuell sind. Grün erscheint nur, wenn alles stimmt.
+
+ClamAV in einem anderen Ordner (z. B. E:\ClamAV)? Dann in
+%LOCALAPPDATA%\UScan\settings.json eintragen:
+   { "freshclamPath": "E:\\ClamAV\\freshclam.exe" }
+
+Was UScan kann und was nicht
+----------------------------
+* Scans (schnell, vollständig, Autostart, Ordner), Heuristik, verschlüsselte
+  Quarantäne, Autostart-Übersicht, Ordnerüberwachung (meldet nach dem Speichern,
+  blockiert nicht), Defender-Zweitmeinung.
+* KEIN blockierender Echtzeitschutz, kein Ersatz für Microsoft Defender.
+  UScan schaltet Defender, Firewall oder UAC nie ab.
+* Keine Telemetrie, keine Datei verlässt den PC.
+
+Die Programmdateien sind nicht mit einem Code-Signing-Zertifikat signiert.
+Windows SmartScreen kann deshalb beim ersten Start warnen
+("Weitere Informationen" -> "Trotzdem ausführen").
+
+Daten (Berichte, Quarantäne, Protokoll): %LOCALAPPDATA%\UScan
+Diese bleiben beim Deinstallieren erhalten.
+
+Kommandozeile: uscan-cli.exe status | scan quick | scan full | quarantine list ...
+Quellcode und Dokumentation: https://github.com/Uleimon/UScan

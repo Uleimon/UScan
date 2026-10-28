@@ -1,12 +1,26 @@
 # 08 – Installation, Start, Bedienung und Updates
 
-Es gibt noch **kein Installationspaket** (MSI/MSIX). UScan wird aus dem Quellcode gebaut. Alle Schritte unten laufen mit normalen Benutzerrechten, außer der ClamAV-Installation.
+## 0. Fertiges Paket (empfohlen)
+
+Unter [Releases](https://github.com/Uleimon/UScan/releases) gibt es zu jeder Version:
+
+* `UScan-<Version>-Setup.exe` – installiert pro Benutzer nach `%LOCALAPPDATA%\Programs\UScan` (keine Administratorrechte nötig), legt Startmenü- und optional Desktop-Verknüpfung an, bringt eine Deinstallation mit. Daten unter `%LOCALAPPDATA%\UScan` bleiben beim Deinstallieren erhalten.
+* `UScan-<Version>-win-x64.zip` – dasselbe zum Entpacken, ohne Installation.
+* `SHA256SUMS.txt` – Prüfsummen.
+
+Beide enthalten `UScan.exe` (Oberfläche), `uscan-cli.exe` (Kommandozeile; im Paket umbenannt, weil Windows `uscan.exe` und `UScan.exe` nicht unterscheidet) und `LIESMICH.txt`. Die .NET-Laufzeit ist eingebaut; **ClamAV ist nicht enthalten** und muss wie in Abschnitt 1–2 eingerichtet werden. Die Dateien sind nicht Authenticode-signiert, Windows SmartScreen kann beim ersten Start warnen.
+
+Gebaut werden die Pakete von `.github/workflows/release.yml` (bei einem Tag `v*`). Die CI testet dabei das veröffentlichte Programm selbst: Oberflächen-Selbsttest, EICAR-Fund der Kommandozeile mit echtem `clamd`, stille Installation, Start und Deinstallation.
+
+Neue Version veröffentlichen: Version in `Directory.Build.props` erhöhen, dann `git tag v0.5.1 && git push origin v0.5.1`.
+
+Ohne Paket wird UScan aus dem Quellcode gebaut (Abschnitt 3). Alle Schritte laufen mit normalen Benutzerrechten, außer der ClamAV-Installation.
 
 ## 1. Voraussetzungen (Windows 10 22H2 oder Windows 11, x64)
 
 1. **.NET 10 SDK** von https://dotnet.microsoft.com/download/dotnet/10.0 installieren. Prüfen: `dotnet --version` zeigt `10.0.x`.
 2. **Git** (optional, sonst das Repository als ZIP von GitHub herunterladen).
-3. **ClamAV für Windows** (getestet: 1.5.4) über den offiziellen Installer von https://www.clamav.net/downloads (x64 `.msi`). Standardpfad: `C:\Program Files\ClamAV`.
+3. **ClamAV für Windows** (getestet: 1.5.4) über den offiziellen Installer von https://www.clamav.net/downloads – die Datei mit **`win.x64`** im Namen. Die ARM64-Version startet auf normalen PCs mit „keine gültige Anwendung für diese Betriebssystemplattform“. Standardpfad: `C:\Program Files\ClamAV`.
 
 ## 2. ClamAV einrichten (einmalig, PowerShell als Administrator)
 
@@ -55,7 +69,7 @@ Fertige Programme liegen danach unter `src\UScan.Desktop\bin\Release\net10.0-win
 
 ```powershell
 dotnet publish src\UScan.Desktop -c Release -r win-x64 --self-contained -o publish\UScan
-dotnet publish src\UScan.Cli -c Release -f net10.0-windows -r win-x64 --self-contained -o publish\UScan
+dotnet publish src\UScan.Cli -c Release -f net10.0-windows -r win-x64 --self-contained -o publish\uscan-cli   # eigener Ordner: Windows unterscheidet uscan.exe und UScan.exe nicht
 ```
 
 ## 4. Oberfläche
@@ -132,5 +146,7 @@ Alles liegt in `%LOCALAPPDATA%\UScan`: `reports\` (Scanberichte), `logs\` (Ereig
 | „Scan-Engine NICHT erreichbar“ | `clamd` läuft nicht oder anderer Port. `Get-Service clamd` bzw. Fenster prüfen, Port in `settings.json` |
 | „Keine offizielle Signaturdatenbank erkannt“ | `freshclam` noch nicht gelaufen |
 | „freshclam failed: network connection problem (exit code 52)“ | Internet/Proxy prüfen; Proxy in `freshclam.conf` eintragen |
+| `freshclam.exe`/`clamd.exe`: „keine gültige Anwendung für diese Betriebssystemplattform“ | Falsche ClamAV-Version (ARM64). `win.x64`-Paket installieren |
+| ClamAV in anderem Ordner (z. B. `E:\ClamAV`) | In `settings.json` `"freshclamPath": "E:\\ClamAV\\freshclam.exe"` eintragen; `clamd` wird über TCP angesprochen, sein Ordner ist egal |
 | „Echtzeitschutz: unbekannt“ mit Hinweis auf anderes Antivirenprogramm | Defender ist passiv, weil ein anderes Produkt registriert ist; dessen Status kann UScan nicht lesen |
 | Funde „Unvollständig geprüft“ | Archiv überschreitet die Grenzen; Grenzen in `clamd.conf` **und** `settings.json` erhöhen oder Datei einzeln prüfen |

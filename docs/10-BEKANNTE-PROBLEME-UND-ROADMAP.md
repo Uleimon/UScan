@@ -13,7 +13,7 @@
 9. **Mischsprache:** Gründe in der Statusanzeige, Protokolleinträge und einige Fehlermeldungen aus dem Kern sind englisch, die Oberfläche ist deutsch.
 10. **Oberfläche:** Bedienung, Kontraste und Screenreader wurden nicht systematisch geprüft; die CI startet die Oberfläche nur und macht ein Bildschirmfoto.
 11. **Programm-Updates** haben keinen Download-Client und keine Root/Targets-Schlüsseltrennung.
-12. **Kein Installer**, keine Authenticode-Signatur der eigenen Dateien – Windows SmartScreen kann beim ersten Start warnen.
+12. **Installer ohne Authenticode-Signatur** und ohne ClamAV: Setup (Inno Setup) und ZIP werden von der Release-CI gebaut, die Dateien sind aber nicht signiert – Windows SmartScreen kann beim ersten Start warnen. ClamAV muss separat installiert werden.
 13. **Windows 10:** getestet wird in der CI nur auf `windows-latest` (Windows Server 2022/2025). Windows 10 22H2 und Windows 11 Client wurden nicht automatisiert getestet.
 14. **Leistungszahlen** stammen aus einer Test-Signaturdatenbank mit einer Signatur; mit der offiziellen Datenbank sind Speicherbedarf und Dauer von clamd deutlich höher.
 
@@ -21,7 +21,7 @@
 
 | # | Vorhaben | Nutzen |
 |---|---|---|
-| 1 | Installer (MSIX oder WiX) inkl. ClamAV-Einrichtung, Autostart der Überwachung im Infobereich | einfache Installation, Überwachung läuft dauerhaft |
+| 1 | Installer um ClamAV-Einrichtung (GPL-Pflichten beachten) und Autostart der Überwachung im Infobereich erweitern; Code-Signing-Zertifikat | einfache Installation, Überwachung läuft dauerhaft |
 | 2 | Optionaler Windows-Dienst für Scans mit Systemrechten, Quarantäne unter `%ProgramData%` mit ACL (nur SYSTEM/Admins), Named-Pipe mit Prüfung der Client-Identität | vollständige Scans, Quarantäne vor Benutzer-Malware geschützt |
 | 3 | Zeitgesteuerte Scans über die Windows-Aufgabenplanung | regelmäßige Prüfung ohne Zutun |
 | 4 | AMSI-Scan von Skriptinhalten über Defender, ETW-Prozessereignisse (Admin) | bessere Erkennung dateiloser Angriffe |
