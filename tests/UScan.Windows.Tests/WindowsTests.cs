@@ -184,3 +184,60 @@ public sealed class HeuristicFalsePositiveTests
         Assert.True(flagged.Count == 0, string.Join("\n", flagged));
     }
 }
+
+[SupportedOSPlatform("windows")]
+public sealed class DefenderTests
+{
+    public DefenderTests()
+    {
+        WindowsOnly.Require();
+    }
+
+    [Fact]
+    public void Interpret_requires_threat_line_for_detection()
+    {
+        var hit = UScan.Windows.Defender.DefenderEngine.Interpret(2, "Scan starting...\r\nScan finished.\r\nScanning C:\\x found 1 threats.\r\nThreat                  : Virus:DOS/EICAR_Test_File\r\n");
+        Assert.Equal(UScan.Core.Model.Verdict.Infected, hit.Verdict);
+        Assert.Equal("Virus:DOS/EICAR_Test_File", hit.DetectionName);
+
+        var error = UScan.Windows.Defender.DefenderEngine.Interpret(2, "CmdTool: Failed with hr = 0x800106BA. The service is not running.");
+        Assert.Equal(UScan.Core.Model.Verdict.Error, error.Verdict);
+
+        Assert.Equal(UScan.Core.Model.Verdict.Clean, UScan.Windows.Defender.DefenderEngine.Interpret(0, "Scanning C:\\x found no threats.").Verdict);
+    }
+
+    [Fact]
+    public async Task Defender_detects_eicar_when_available()
+    {
+        var engine = UScan.Windows.Defender.DefenderEngine.TryCreate();
+        if (engine is null)
+        {
+            Assert.Skip("MpCmdRun.exe not present.");
+        }
+
+        var status = UScan.Windows.Defender.DefenderStatusProvider.Query();
+        if (status.AntivirusEnabled != true)
+        {
+            Assert.Skip($"Defender antivirus not enabled on this machine ({status.Error ?? "AntivirusEnabled=false"}).");
+        }
+
+        var dir = Directory.CreateTempSubdirectory("uscan-def-").FullName;
+        var file = Path.Combine(dir, "eicar.com");
+        File.WriteAllText(file, string.Concat(@"X5O!P%@AP[4\PZX54(P^)7CC)7}$", "EICAR-STANDARD-ANTIVIRUS", "-TEST-FILE!$H+H*"));
+        if (!File.Exists(file))
+        {
+            Assert.Skip("Real-time protection removed the EICAR file immediately.");
+        }
+
+        var r = await engine.ScanFileAsync(file, TestContext.Current.CancellationToken);
+        Assert.True(r.Verdict == UScan.Core.Model.Verdict.Infected, $"{r.Verdict}: {r.Detail}");
+        Assert.Contains("EICAR", r.DetectionName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Status_query_does_not_throw()
+    {
+        var s = UScan.Windows.Defender.DefenderStatusProvider.Query();
+        Assert.True(s.Available || s.Error is not null);
+    }
+}

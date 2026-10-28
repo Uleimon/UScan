@@ -20,6 +20,12 @@ public sealed class ScanOptions
     /// <summary>Optional heuristic analyzers, run on files the engine reported as clean. Results are at most "suspicious".</summary>
     public IReadOnlyList<Heuristics.IHeuristicAnalyzer> Heuristics { get; init; } = [];
 
+    /// <summary>
+    /// Optional independent engine consulted for every infected or suspicious file (scan mode "second opinion").
+    /// A signature hit from it upgrades a heuristic "suspicious" to "infected"; it never downgrades a detection.
+    /// </summary>
+    public Engines.IFileScanEngine? SecondOpinion { get; init; }
+
     /// <summary>Test seam for simulating I/O failures. Production code uses <see cref="OpenForScan"/>.</summary>
     internal Func<string, Stream>? OpenFile { get; init; }
 
@@ -256,6 +262,16 @@ public sealed class ScanRunner
             {
                 results.Add(heuristic);
                 engineResult = heuristic;
+            }
+
+            if (_options.SecondOpinion is { } second && engineResult.Verdict is Verdict.Infected or Verdict.Suspicious)
+            {
+                var opinion = await second.ScanFileAsync(path, ct).ConfigureAwait(false);
+                results.Add(opinion);
+                if (engineResult.Verdict == Verdict.Suspicious && opinion.Verdict == Verdict.Infected)
+                {
+                    engineResult = opinion;
+                }
             }
 
             return new FileScanResult(path, hashing.BytesRead, sha, engineResult.Verdict,

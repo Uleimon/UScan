@@ -26,3 +26,11 @@ public sealed class EngineUnavailableException : Exception
     public EngineUnavailableException(string message, Exception inner) : base(message, inner) { }
     public EngineUnavailableException() { }
 }
+
+/// <summary>An engine that scans files by path (e.g. an external command-line scanner used as second opinion).</summary>
+public interface IFileScanEngine
+{
+    string Id { get; }
+
+    Task<EngineResult> ScanFileAsync(string path, CancellationToken cancellationToken);
+}

