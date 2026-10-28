@@ -35,6 +35,10 @@ UScan ist ein überprüfbarer, mehrschichtiger Malware-Scanner für Windows 10/1
 
 ## Schnellstart (Windows)
 
+**Fertiges Programm:** Unter [Releases](https://github.com/Uleimon/UScan/releases) liegen `UScan-<Version>-Setup.exe` (Installation ohne Administratorrechte, Startmenü- und Desktop-Verknüpfung) und eine ZIP-Datei zum Entpacken. .NET muss dafür nicht installiert sein, ClamAV schon (siehe `LIESMICH.txt` im Paket bzw. [docs/08](docs/08-INSTALLATION-UND-BEDIENUNG.md)).
+
+**Aus dem Quellcode:**
+
 1. [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) und [ClamAV für Windows](https://www.clamav.net/downloads) installieren, Signaturen mit `freshclam` laden und `clamd` starten (Schritt für Schritt in [docs/08](docs/08-INSTALLATION-UND-BEDIENUNG.md)).
 2. Repository holen und starten:
    ```powershell
