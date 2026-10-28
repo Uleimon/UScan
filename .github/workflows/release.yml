@@ -91,6 +91,7 @@ jobs:
           if (-not (Test-Path "$work\files\eicar.com")) { Write-Error "EICAR-Datei wurde vor dem Scan entfernt (Defender?)"; exit 1 }
           if ($code -ne 1) { Write-Error "Erwartet: Exit-Code 1 (Fund), erhalten: $code"; exit 1 }
           Write-Host "EICAR erkannt, Exit-Code 1"
+          exit 0   # the expected exit code 1 of uscan-cli would otherwise fail the step
 
       - name: ZIP packen
         shell: pwsh
