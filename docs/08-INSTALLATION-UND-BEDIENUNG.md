@@ -69,7 +69,7 @@ Fertige Programme liegen danach unter `src\UScan.Desktop\bin\Release\net10.0-win
 
 ```powershell
 dotnet publish src\UScan.Desktop -c Release -r win-x64 --self-contained -o publish\UScan
-dotnet publish src\UScan.Cli -c Release -f net10.0-windows -r win-x64 --self-contained -o publish\UScan
+dotnet publish src\UScan.Cli -c Release -f net10.0-windows -r win-x64 --self-contained -o publish\uscan-cli   # eigener Ordner: Windows unterscheidet uscan.exe und UScan.exe nicht
 ```
 
 ## 4. Oberfläche
