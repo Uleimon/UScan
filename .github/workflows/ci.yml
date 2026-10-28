@@ -22,9 +22,11 @@ jobs:
       - name: Dienst des Pakets stoppen (Tests starten einen eigenen clamd)
         run: sudo systemctl stop clamav-daemon clamav-freshclam || true
       - run: dotnet build -c Release
-      - name: Tests
-        run: dotnet test -c Release --no-build --logger "trx;LogFileName=linux.trx" --results-directory TestResults
-      - name: Integrationstests dürfen nicht übersprungen worden sein
+      - name: Tests (Kern)
+        run: dotnet test tests/UScan.Core.Tests -c Release --no-build --logger "trx;LogFileName=linux.trx" --results-directory TestResults
+      - name: Windows-Tests (werden unter Linux als übersprungen gemeldet)
+        run: dotnet test tests/UScan.Windows.Tests -c Release --no-build
+      - name: Kerntests dürfen nicht übersprungen worden sein
         shell: bash
         run: |
           if grep -q 'outcome="NotExecuted"' TestResults/*.trx; then
@@ -55,12 +57,12 @@ jobs:
           Write-Host "clamd: $($clamd.FullName)"
       - run: dotnet build -c Release
       - name: Tests
-        run: dotnet test -c Release --no-build --logger "trx;LogFileName=windows.trx" --results-directory TestResults
-      - name: Integrationstests dürfen nicht übersprungen worden sein
+        run: dotnet test -c Release --no-build --logger trx --results-directory TestResults
+      - name: Keine Tests dürfen übersprungen worden sein
         shell: pwsh
         run: |
           if (Select-String -Path TestResults\*.trx -Pattern 'outcome="NotExecuted"' -Quiet) {
-            Write-Error "Integrationstests wurden übersprungen (clamd nicht gefunden)"; exit 1
+            Write-Error "Tests wurden übersprungen"; exit 1
           }
       - uses: actions/upload-artifact@v4
         if: always()
