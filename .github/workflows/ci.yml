@@ -51,7 +51,7 @@ jobs:
       - name: clamd finden
         shell: pwsh
         run: |
-          $clamd = Get-ChildItem -Path "C:\Program Files\ClamAV","C:\ProgramData\chocolatey\lib\clamav" -Recurse -Filter clamd.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          $clamd = Get-Item -Path "C:\ProgramData\chocolatey\lib\clamav\tools\clamav-*\clamd.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $clamd) { Write-Error "clamd.exe nicht gefunden"; exit 1 }
           "USCAN_CLAMD=$($clamd.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
           Write-Host "clamd: $($clamd.FullName)"

@@ -17,6 +17,9 @@ public sealed class ScanOptions
     /// <summary>Must match the engine's archive limits so that partial archive scans are reported as incomplete.</summary>
     public ArchiveLimits ArchiveLimits { get; init; } = ArchiveLimits.Default;
 
+    /// <summary>Optional heuristic analyzers, run on files the engine reported as clean. Results are at most "suspicious".</summary>
+    public IReadOnlyList<Heuristics.IHeuristicAnalyzer> Heuristics { get; init; } = [];
+
     /// <summary>Test seam for simulating I/O failures. Production code uses <see cref="OpenForScan"/>.</summary>
     internal Func<string, Stream>? OpenFile { get; init; }
 
@@ -248,14 +251,53 @@ public sealed class ScanRunner
                 engineResult = CheckArchiveCoverage(path, engineResult);
             }
 
+            var results = new List<EngineResult> { engineResult };
+            if (engineResult.Verdict == Verdict.Clean && RunHeuristics(path, hashing.BytesRead) is { } heuristic)
+            {
+                results.Add(heuristic);
+                engineResult = heuristic;
+            }
+
             return new FileScanResult(path, hashing.BytesRead, sha, engineResult.Verdict,
                 engineResult.Verdict == Verdict.Skipped ? SkipReason.TooLarge : SkipReason.None,
-                [engineResult], engineResult.Verdict is Verdict.Error or Verdict.Incomplete ? engineResult.Detail : null, sw.Elapsed);
+                results, engineResult.Verdict is Verdict.Error or Verdict.Incomplete or Verdict.Suspicious ? engineResult.Detail : null, sw.Elapsed);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return new FileScanResult(path, size, null, Verdict.Error, SkipReason.None, [], ex.Message, sw.Elapsed);
         }
+    }
+
+    private EngineResult? RunHeuristics(string path, long size)
+    {
+        if (_options.Heuristics.Count == 0 || size > 64L * 1024 * 1024)
+        {
+            return null;
+        }
+
+        Span<byte> header = stackalloc byte[8];
+        int headerLength;
+        using (var probe = (_options.OpenFile ?? ScanOptions.OpenForScan)(path))
+        {
+            headerLength = probe.ReadAtLeast(header, header.Length, throwOnEndOfStream: false);
+        }
+
+        foreach (var analyzer in _options.Heuristics)
+        {
+            if (!analyzer.CanAnalyze(path, header[..headerLength]))
+            {
+                continue;
+            }
+
+            using var stream = (_options.OpenFile ?? ScanOptions.OpenForScan)(path);
+            var r = analyzer.Analyze(path, stream);
+            if (r.Suspicious)
+            {
+                return new EngineResult(Verdict.Suspicious, "uscan-heuristic", $"UScan.Heuristic.Score{r.Score}", r.Explain());
+            }
+        }
+
+        return null;
     }
 
     /// <summary>Downgrades "clean" to "incomplete" when the engine cannot have seen the whole archive.</summary>
