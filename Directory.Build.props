@@ -7,5 +7,7 @@
     <AnalysisLevel>latest-recommended</AnalysisLevel>
     <Deterministic>true</Deterministic>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- Instance members are kept for API shape and testability. -->
+    <NoWarn>$(NoWarn);CA1822</NoWarn>
   </PropertyGroup>
 </Project>

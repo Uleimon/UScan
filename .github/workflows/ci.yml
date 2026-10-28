@@ -52,7 +52,7 @@ jobs:
           $clamd = Get-ChildItem -Path "C:\Program Files\ClamAV","C:\ProgramData\chocolatey\lib\clamav" -Recurse -Filter clamd.exe -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $clamd) { Write-Error "clamd.exe nicht gefunden"; exit 1 }
           "USCAN_CLAMD=$($clamd.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
-          & $clamd.FullName --version
+          Write-Host "clamd: $($clamd.FullName)"
       - run: dotnet build -c Release
       - name: Tests
         run: dotnet test -c Release --no-build --logger "trx;LogFileName=windows.trx" --results-directory TestResults
