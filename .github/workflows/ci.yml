@@ -88,9 +88,11 @@ jobs:
         shell: pwsh
         run: |
           $p = Start-Process -FilePath "src\UScan.Desktop\bin\Release\net10.0-windows\UScan.exe" -ArgumentList "--ui-selftest" -PassThru -RedirectStandardOutput TestResults\ui-selftest.txt -RedirectStandardError TestResults\ui-selftest-err.txt
-          if (-not $p.WaitForExit(90000)) { Stop-Process -Id $p.Id; Write-Error "Selbsttest hängt"; exit 1 }
+          $done = $p.WaitForExit(90000)
+          if (-not $done) { Stop-Process -Id $p.Id; Start-Sleep -Seconds 1 }
           Get-Content TestResults\ui-selftest.txt
           Get-Content TestResults\ui-selftest-err.txt -TotalCount 60
+          if (-not $done) { Write-Error "Selbsttest hängt"; exit 1 }
           if ($p.ExitCode -ne 0) { Write-Error "Selbsttest fehlgeschlagen (Code $($p.ExitCode))"; exit 1 }
       - name: Keine Tests dürfen übersprungen worden sein
         shell: pwsh

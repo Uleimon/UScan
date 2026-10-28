@@ -62,6 +62,20 @@ public partial class App : Application
     /// </summary>
     private async Task RunSelfTestAsync(Window window, MainViewModel main)
     {
+        try
+        {
+            await ShowAllPagesAsync(window, main);
+            Shutdown(0);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+            Shutdown(3);
+        }
+    }
+
+    private static async Task ShowAllPagesAsync(Window window, MainViewModel main)
+    {
         foreach (var page in new[] { "scan", "quarantine", "inventory", "monitor", "log", "about", "dashboard" })
         {
             main.NavigateCommand.Execute(page);
@@ -74,12 +88,11 @@ public partial class App : Application
         window.UpdateLayout();
         await Task.Delay(700);
         Console.Out.WriteLine("theme switch ok");
-        Shutdown(0);
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
-        _main?.Monitor.StopAsync().GetAwaiter().GetResult();
+        _main?.Monitor.StopForExit();
         base.OnExit(e);
     }
 

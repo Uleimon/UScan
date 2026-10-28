@@ -208,6 +208,21 @@ internal sealed class MonitorViewModel : ObservableObject, IDisposable
         _heartbeat = null;
     }
 
+    /// <summary>
+    /// Stops monitoring while the application exits. Runs off the UI thread and does not refresh
+    /// the dashboard, so blocking on it from OnExit cannot deadlock the dispatcher.
+    /// </summary>
+    public void StopForExit()
+    {
+        Dispose();
+        if (_watcher is { } w)
+        {
+            _watcher = null;
+            Task.Run(w.StopAsync).GetAwaiter().GetResult();
+            MonitorHeartbeat.Clear(_host.HeartbeatFile);
+        }
+    }
+
     public async Task StopAsync()
     {
         if (_heartbeat is not null)
