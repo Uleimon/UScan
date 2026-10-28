@@ -1,0 +1,32 @@
+# UScan – gehärtete clamd-Konfiguration (Beispiel)
+# Die Grenzwerte MÜSSEN zu den UScan-Optionen passen
+# (--max-stream-mb, --max-file-mb, --max-scan-mb, --max-files), sonst
+# kann UScan unvollständige Archivprüfungen nicht korrekt ausweisen.
+
+# Nur lokal erreichbar. UScan sendet Dateiinhalte per INSTREAM.
+TCPSocket 3310
+TCPAddr 127.0.0.1
+
+# Windows: Pfade anpassen, z. B.
+# DatabaseDirectory "C:\Program Files\ClamAV\database"
+# LogFile "C:\ProgramData\UScan\Logs\clamd.log"
+LogTime yes
+LogFileMaxSize 10M
+
+# Ressourcengrenzen (Schutz vor ZIP-Bomben und Erschöpfung)
+StreamMaxLength 100M
+MaxFileSize 100M
+MaxScanSize 400M
+MaxFiles 10000
+MaxRecursion 17
+MaxScanTime 120000
+MaxThreads 4
+MaxQueue 50
+
+# Limit-Überschreitungen und verschlüsselte Archive melden statt still "OK"
+AlertExceedsMax yes
+AlertEncrypted yes
+
+# clamd soll unter einem eigenen Konto OHNE Lesezugriff auf Nutzerdateien
+# laufen (Windows: virtuelles Dienstkonto). UScan verwendet ausschließlich
+# INSTREAM und niemals SCAN/CONTSCAN/MULTISCAN mit Pfaden.

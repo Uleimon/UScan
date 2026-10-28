@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/UScan.Cli/UScan.Cli.csproj" />
+    <Project Path="src/UScan.Core/UScan.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/UScan.Core.Tests/UScan.Core.Tests.csproj" />
+  </Folder>
+</Solution>
