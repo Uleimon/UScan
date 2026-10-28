@@ -136,6 +136,39 @@ public sealed class UScanHost
     }
 
     /// <summary>
+    /// Allows an open detection as a false positive, but only if the file still has exactly the
+    /// content that was scanned. Returns null on success, otherwise the reason it was refused.
+    /// </summary>
+    public string? AllowOpenDetection(string path, string reason)
+    {
+        var full = System.IO.Path.GetFullPath(path);
+        var open = OpenDetections().FirstOrDefault(d => string.Equals(d.Path, full, StringComparison.OrdinalIgnoreCase));
+        if (open?.Sha256 is null)
+        {
+            return "There is no open detection for this file.";
+        }
+
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            return "A reason is required (it is logged).";
+        }
+
+        string current;
+        using (var s = File.OpenRead(full))
+        {
+            current = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(s));
+        }
+
+        if (!current.Equals(open.Sha256, StringComparison.OrdinalIgnoreCase))
+        {
+            return "The file has changed since it was scanned. Scan it again first.";
+        }
+
+        Allow(current, full, reason);
+        return null;
+    }
+
+    /// <summary>
     /// Detections from recent reports that are still present: the newest result for the path is a
     /// detection, the file still exists, and its hash is not on the allow list.
     /// </summary>

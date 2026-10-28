@@ -15,7 +15,7 @@ Testdaten: ausschließlich harmlos. EICAR wird zur Laufzeit zusammengesetzt; ZIP
 
 ## Nachtrag Version 0.5.2
 
-Die Abbruchmeldung nennt die Datei, bei der die Verbindung verloren ging. Wartezeit auf die Engine auf 24 × 5 s (2 min) verlängert, damit ein von Windows nach einem Absturz neu gestarteter `clamd`-Dienst (Wiederherstellungsoption, siehe docs/08) seine Signaturen laden kann. Tests: Linux 180/180.
+Die Abbruchmeldung nennt die Datei, bei der die Verbindung verloren ging. Wartezeit auf die Engine auf 24 × 5 s (2 min) verlängert, damit ein von Windows nach einem Absturz neu gestarteter `clamd`-Dienst (Wiederherstellungsoption, siehe docs/08) seine Signaturen laden kann. Offene Funde lassen sich in der Übersicht direkt in Quarantäne verschieben oder als Fehlalarm zulassen (vorher nur über die Kommandozeile). Tests: Linux 183/183 (3 neue in HostAllowTests), Windows zusätzlich 1 neuer Oberflächentest.
 
 ## Nachtrag Version 0.5.1
 

@@ -9,7 +9,7 @@ internal sealed class MainViewModel : ObservableObject
     public MainViewModel(UScanHost host, IDialogs dialogs)
     {
         Host = host;
-        Dashboard = new DashboardViewModel(host, () => Scan?.Running == true);
+        Dashboard = new DashboardViewModel(host, () => Scan?.Running == true, dialogs);
         Scan = new ScanViewModel(host, dialogs, RefreshAllAsync);
         Quarantine = new QuarantineViewModel(host, dialogs, () => Dashboard.RefreshAsync());
         Inventory = new InventoryViewModel(host);

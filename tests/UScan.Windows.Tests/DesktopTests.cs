@@ -22,6 +22,13 @@ public sealed class DesktopViewModelTests : IDisposable
 
     public void Dispose() => Directory.Delete(_dir, recursive: true);
 
+    private sealed class YesDialogs : IDialogs
+    {
+        public bool Confirm(string title, string message, bool dangerous = false) => true;
+        public void Info(string title, string message) { }
+        public string? PickFolder() => null;
+    }
+
     private sealed class NoDialogs : IDialogs
     {
         public bool Confirm(string title, string message, bool dangerous = false) => false;
@@ -67,6 +74,33 @@ public sealed class DesktopViewModelTests : IDisposable
         Assert.Equal(ProtectionState.ThreatFound, vm.State);
         Assert.Equal("DangerBrush", vm.StateBrushKey);
         Assert.Single(vm.OpenDetections);
+    }
+
+    [Fact]
+    public async Task Open_detection_can_be_allowed_or_quarantined_from_the_dashboard()
+    {
+        var host = Host();
+        var allowMe = Path.Combine(_dir, "allow.bin");
+        var moveMe = Path.Combine(_dir, "move.bin");
+        await File.WriteAllTextAsync(allowMe, "a", TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(moveMe, "m", TestContext.Current.CancellationToken);
+        static string Sha(string text) => Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(text)));
+        host.Reports.Save(new ScanReport(Guid.NewGuid(), DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, ScanOutcome.Completed, [_dir], null, 2,
+            [new FileScanResult(allowMe, 1, Sha("a"), Verdict.Infected, SkipReason.None, [new EngineResult(Verdict.Infected, "clamav", "Test.A", null)], null, TimeSpan.Zero),
+             new FileScanResult(moveMe, 1, Sha("m"), Verdict.Infected, SkipReason.None, [new EngineResult(Verdict.Infected, "clamav", "Test.M", null)], null, TimeSpan.Zero)], []));
+
+        var vm = new DashboardViewModel(host, () => false, new YesDialogs());
+        await vm.RefreshAsync();
+        Assert.Equal(2, vm.OpenDetections.Count);
+
+        await vm.AllowDetectionAsync(vm.OpenDetections.Single(r => r.Detection.Path == allowMe));
+        await vm.QuarantineDetectionAsync(vm.OpenDetections.Single(r => r.Detection.Path == moveMe));
+
+        Assert.Empty(vm.OpenDetections);
+        Assert.True(File.Exists(allowMe));
+        Assert.False(File.Exists(moveMe));
+        Assert.Single(host.Quarantine.List());
+        Assert.NotEqual(ProtectionState.ThreatFound, vm.State);
     }
 
     [Fact]

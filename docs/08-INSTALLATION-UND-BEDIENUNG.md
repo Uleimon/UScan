@@ -77,7 +77,7 @@ dotnet publish src\UScan.Cli -c Release -f net10.0-windows -r win-x64 --self-con
 
 | Seite | Inhalt |
 |---|---|
-| Übersicht | Gesamtstatus (Farbe Grün nur bei „Geschützt“), Gründe, Engine, Signaturen, Echtzeitschutz (Defender), Dateiüberwachung, Quarantäne, offene Funde; „Signaturen aktualisieren“ |
+| Übersicht | Gesamtstatus (Farbe Grün nur bei „Geschützt“), Gründe, Engine, Signaturen, Echtzeitschutz (Defender), Dateiüberwachung, Quarantäne, offene Funde mit „In Quarantäne“ und „Als Fehlalarm zulassen“ (nur für genau den gescannten Dateiinhalt, wird protokolliert); „Signaturen aktualisieren“ |
 | Scannen | Schnell, Vollständig, Autostart, Ordner; Fortschritt, Abbruch; Funde mit Begründung (Tooltip), Auswahl in Quarantäne |
 | Quarantäne | Wiederherstellen (mit Nachscan), Unversehrtheit prüfen, endgültig löschen |
 | Autostart | Alle Einträge mit Signatur; „Änderungen seit letzter Prüfung“ |
