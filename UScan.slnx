@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/UScan.Cli/UScan.Cli.csproj" />
     <Project Path="src/UScan.Core/UScan.Core.csproj" />
+    <Project Path="src/UScan.Desktop/UScan.Desktop.csproj" />
     <Project Path="src/UScan.Windows/UScan.Windows.csproj" />
   </Folder>
   <Folder Name="/tests/">

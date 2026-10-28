@@ -4,6 +4,7 @@
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
+    <UseWPF>true</UseWPF>
     <NoWarn>$(NoWarn);CA1707;CA2007;CA1515;CA1861;CA5394;CA1063;CA1816</NoWarn>
   </PropertyGroup>
   <ItemGroup>
@@ -13,8 +14,11 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/UScan.Windows/UScan.Windows.csproj" />
+    <ProjectReference Include="../../src/UScan.Desktop/UScan.Desktop.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />
+    <!-- UseWPF drops System.IO from the implicit usings. -->
+    <Using Include="System.IO" />
   </ItemGroup>
 </Project>

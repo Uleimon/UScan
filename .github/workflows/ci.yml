@@ -26,10 +26,9 @@ jobs:
       - name: Dienst des Pakets stoppen (Tests starten einen eigenen clamd)
         run: sudo systemctl stop clamav-daemon clamav-freshclam || true
       - run: dotnet build -c Release
-      - name: Tests (Kern)
+      # Die Windows-Testprojekte (Windows-APIs, WPF) werden hier nur gebaut; ausgeführt werden sie im Windows-Job.
+      - name: Tests (Kern, inkl. End-to-End-Tests der Kommandozeile)
         run: dotnet test tests/UScan.Core.Tests -c Release --no-build --logger "trx;LogFileName=linux.trx" --results-directory TestResults
-      - name: Windows-Tests (werden unter Linux als übersprungen gemeldet)
-        run: dotnet test tests/UScan.Windows.Tests -c Release --no-build
       - name: Kerntests dürfen nicht übersprungen worden sein
         shell: bash
         run: |
@@ -62,6 +61,25 @@ jobs:
       - run: dotnet build -c Release
       - name: Tests
         run: dotnet test -c Release --no-build --logger trx --results-directory TestResults
+      - name: Oberfläche startet (Smoke-Test mit Bildschirmfoto)
+        shell: pwsh
+        run: |
+          $exe = "src\UScan.Desktop\bin\Release\net10.0-windows\UScan.exe"
+          $p = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 12
+          $p.Refresh()
+          if ($p.HasExited) { Write-Error "UScan.exe wurde mit Code $($p.ExitCode) beendet"; exit 1 }
+          Write-Host "Fenstertitel: '$($p.MainWindowTitle)'"
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+          $g = [System.Drawing.Graphics]::FromImage($bmp)
+          $g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+          New-Item -ItemType Directory -Force -Path TestResults | Out-Null
+          $bmp.Save("TestResults\ui-dashboard.png")
+          $title = $p.MainWindowTitle
+          Stop-Process -Id $p.Id
+          if ($title -ne "UScan") { Write-Error "Hauptfenster 'UScan' nicht gefunden (Titel: '$title')"; exit 1 }
       - name: Keine Tests dürfen übersprungen worden sein
         shell: pwsh
         run: |
