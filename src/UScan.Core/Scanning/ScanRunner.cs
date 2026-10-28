@@ -265,7 +265,7 @@ public sealed class ScanRunner
             catch (EngineUnavailableException first)
             {
                 // Throws (and so aborts the scan) only if the engine stays unreachable.
-                await WaitForEngineAsync(first, ct).ConfigureAwait(false);
+                await WaitForEngineAsync(first, path, ct).ConfigureAwait(false);
                 try
                 {
                     scanned = await ScanContentAsync(path, ct).ConfigureAwait(false);
@@ -274,7 +274,7 @@ public sealed class ScanRunner
                 {
                     if (!await IsReachableAsync(ct).ConfigureAwait(false))
                     {
-                        throw;
+                        throw new EngineUnavailableException($"{again.Message} (engine went away again; file being scanned: {path})", again);
                     }
 
                     // The engine is up but drops this particular file: report the file, keep scanning.
@@ -356,7 +356,7 @@ public sealed class ScanRunner
         return (result, hashing.BytesRead, sha);
     }
 
-    private async Task WaitForEngineAsync(EngineUnavailableException cause, CancellationToken ct)
+    private async Task WaitForEngineAsync(EngineUnavailableException cause, string path, CancellationToken ct)
     {
         for (var i = 0; i < _options.EngineRecoveryAttempts; i++)
         {
@@ -368,7 +368,7 @@ public sealed class ScanRunner
         }
 
         throw new EngineUnavailableException(
-            $"{cause.Message} (still unreachable after {_options.EngineRecoveryAttempts} attempts, {_options.EngineRecoveryDelay.TotalSeconds:F0} s apart)", cause);
+            $"{cause.Message} (still unreachable after {_options.EngineRecoveryAttempts} attempts, {_options.EngineRecoveryDelay.TotalSeconds:F0} s apart; file being scanned when the connection was lost: {path})", cause);
     }
 
     private async Task<bool> IsReachableAsync(CancellationToken ct)
