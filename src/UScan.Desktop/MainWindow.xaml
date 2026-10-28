@@ -84,8 +84,8 @@
                     </WrapPanel>
                 </StackPanel>
                 <StackPanel Grid.Row="1" Margin="0,4,0,8">
-                    <ProgressBar Height="10" Minimum="0" Maximum="100" Value="{Binding Progress}"
-                                 IsIndeterminate="{Binding Running}" Visibility="{Binding Running, Converter={StaticResource BoolToVis}}"/>
+                    <ProgressBar Height="10" Minimum="0" Maximum="100" Value="{Binding Progress, Mode=OneWay}"
+                                 IsIndeterminate="{Binding ProgressUnknown, Mode=OneWay}" Visibility="{Binding Running, Converter={StaticResource BoolToVis}}"/>
                     <TextBlock Text="{Binding ProgressText}" Margin="0,6,0,0"/>
                     <TextBlock Style="{StaticResource Hint}" Text="Ein Prozentwert erscheint erst, wenn alle Dateien gezählt sind."/>
                 </StackPanel>

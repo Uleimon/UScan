@@ -61,8 +61,31 @@ internal sealed class ScanViewModel : ObservableObject, IDisposable
     public AsyncCommand QuarantineCommand { get; }
 
     public ObservableCollection<ScanResultRow> Results { get; } = [];
-    public bool Running { get => _running; private set => Set(ref _running, value); }
-    public bool ProgressKnown { get => _progressKnown; private set => Set(ref _progressKnown, value); }
+    public bool Running
+    {
+        get => _running;
+        private set
+        {
+            if (Set(ref _running, value))
+            {
+                OnPropertyChanged(nameof(ProgressUnknown));
+            }
+        }
+    }
+    public bool ProgressKnown
+    {
+        get => _progressKnown;
+        private set
+        {
+            if (Set(ref _progressKnown, value))
+            {
+                OnPropertyChanged(nameof(ProgressUnknown));
+            }
+        }
+    }
+
+    /// <summary>True while scanning and the total number of files is not yet known.</summary>
+    public bool ProgressUnknown => Running && !ProgressKnown;
     public double Progress { get => _progress; private set => Set(ref _progress, value); }
     public string ProgressText { get => _progressText; private set => Set(ref _progressText, value); }
     public string Summary { get => _summary; private set => Set(ref _summary, value); }
