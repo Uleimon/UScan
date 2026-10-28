@@ -65,10 +65,14 @@ jobs:
         shell: pwsh
         run: |
           $exe = "src\UScan.Desktop\bin\Release\net10.0-windows\UScan.exe"
-          $p = Start-Process -FilePath $exe -PassThru
+          New-Item -ItemType Directory -Force -Path TestResults | Out-Null
+          $p = Start-Process -FilePath $exe -PassThru -RedirectStandardError TestResults\ui-stderr.txt -RedirectStandardOutput TestResults\ui-stdout.txt
           Start-Sleep -Seconds 12
           $p.Refresh()
-          if ($p.HasExited) { Write-Error "UScan.exe wurde mit Code $($p.ExitCode) beendet"; exit 1 }
+          if ($p.HasExited) {
+            Get-Content TestResults\ui-stderr.txt -TotalCount 120
+            Write-Error "UScan.exe wurde mit Code $($p.ExitCode) beendet"; exit 1
+          }
           Write-Host "Fenstertitel: '$($p.MainWindowTitle)'"
           Add-Type -AssemblyName System.Windows.Forms, System.Drawing
           $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds

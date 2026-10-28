@@ -1,106 +1,126 @@
 # 02 – Architektur
 
-Legende: ✅ implementiert und getestet · 🟡 geplant, Schnittstelle festgelegt · ⛔ bewusst nicht vorgesehen
+Legende: ✅ implementiert und getestet · ⛔ bewusst nicht vorhanden · ⏭ für später vorgesehen (siehe Roadmap)
 
-## 1. Prozesse und Sicherheitsgrenzen (Zielbild Windows)
+## 1. Prozesse und Sicherheitsgrenzen
 
 ```
- Benutzer-Sitzung (mittlere Integrität)          Dienste
-┌───────────────────────────────┐       ┌──────────────────────────────────────┐
-│ UScan.App (WPF)        🟡   │ Named │ UScan.Service           🟡         │
-│  - zeigt nur Backend-Daten    │ Pipe  │  (LocalSystem, nur für privilegierte │
-│  - keine Dateizugriffe für    │◄─────►│   Aktionen: Quarantäne, Inventar)    │
-│    Scans                      │ ACL:  │  - ScanRunner          ✅            │
-├───────────────────────────────┤ Nutzer│  - StatusEvaluator     ✅            │
-│ uscan CLI              ✅   │ + Adm.│  - QuarantineStore     🟡            │
-│  (Phase 1: spricht direkt     │       │  - Inventory/Behavior  🟡            │
-│   mit clamd)                  │       │  - UpdateManager       🟡            │
-└───────────────────────────────┘       └───────────┬──────────────────────────┘
-                                                    │ TCP 127.0.0.1:3310, INSTREAM
-                                                    ▼  (nur Dateiinhalt, keine Pfade)
-                                        ┌──────────────────────────────────────┐
-                                        │ clamd (ClamAV)          ✅ (Linux)   │
-                                        │  eigenes virtuelles Dienstkonto,     │
-                                        │  OHNE Lesezugriff auf Nutzerdateien  │
-                                        └──────────────────────────────────────┘
-                                        ┌──────────────────────────────────────┐
-                                        │ Microsoft Defender (vorhanden)  🟡   │
-                                        │  MpCmdRun / AMSI als 2. Meinung      │
-                                        └──────────────────────────────────────┘
+ Benutzer-Sitzung (normale Rechte, kein Admin nötig)
+┌──────────────────────────────┐   ┌──────────────────────────────┐
+│ UScan.exe (WPF)          ✅ │   │ uscan (Kommandozeile)     ✅ │
+│  ViewModels zeigen nur Daten │   │  status, scan, quarantine,   │
+│  aus UScanHost               │   │  inventory, watch, update …  │
+└──────────────┬───────────────┘   └──────────────┬───────────────┘
+               └──────────────┬───────────────────┘
+                              ▼
+               ┌──────────────────────────────────────────────┐
+               │ UScan.Core.App.UScanHost                 ✅  │  gemeinsame Zusammensetzung:
+               │  ScanRunner · Heuristik · QuarantineStore    │  CLI und Oberfläche zeigen
+               │  StatusEvaluator · Inventar · Überwachung    │  dieselben Fakten
+               │  Berichte · Ereignisprotokoll · Updates      │
+               └──────┬────────────────┬─────────────┬────────┘
+     TCP 127.0.0.1    │ INSTREAM       │ Prozess     │ WMI / Win32 / COM (nur lesend)
+     (nur Inhalt)     ▼                ▼             ▼
+       ┌────────────────────┐ ┌──────────────────┐ ┌────────────────────────────────┐
+       │ clamd (ClamAV)  ✅ │ │ MpCmdRun.exe  ✅ │ │ WinVerifyTrust, Registry, SCM,  │
+       │ eigener Prozess    │ │ -DisableRemed.   │ │ Task Scheduler, MSFT_MpComputer-│
+       └────────────────────┘ └──────────────────┘ │ Status, SecurityCenter2      ✅ │
+                                                   └────────────────────────────────┘
 ```
 
 Wichtige Grenzen:
 
-* **clamd erhält nur Bytes**, nie Pfade. Würde UScan die `SCAN <pfad>`-Befehle nutzen, könnte jeder lokale Prozess über den unauthentifizierten TCP-Port `clamd` dazu bringen, Dateien mit dessen Rechten zu öffnen. Deshalb: ausschließlich `INSTREAM`, `clamd` unter einem Konto ohne Dateirechte.
-* **Die GUI ist unprivilegiert.** Destruktive Aktionen laufen im Dienst, nach Prüfung der Identität des Pipe-Clients und mit expliziter Bestätigung.
-* **Netzwerk** nur für Signatur-/Programm-Updates und – nach ausdrücklicher Zustimmung – Hash-Reputation.
+* **clamd erhält nur Bytes**, nie Pfade. `SCAN <pfad>` würde jedem lokalen Prozess erlauben, Dateien mit den Rechten von clamd lesen zu lassen. Nicht-Loopback-Adressen werden abgelehnt.
+* **Defender verändert nichts:** `-DisableRemediation` sorgt dafür, dass Defender nur berichtet. Ein Rückgabewert 2 ohne „Threat“-Zeile wird als Fehler gewertet, nicht als Fund.
+* **Kein Dienst, kein Treiber.** UScan läuft vollständig mit den Rechten des angemeldeten Benutzers. Der ursprünglich geplante LocalSystem-Dienst mit Named-Pipe-IPC ist **nicht** umgesetzt (siehe [10](10-BEKANNTE-PROBLEME-UND-ROADMAP.md)). Folge: Dateien, die der Benutzer nicht lesen darf, werden als Fehler gemeldet; die Quarantäne liegt im Benutzerprofil.
+* **Netzwerk** nutzt nur `freshclam` (Signaturen von den ClamAV-Mirrors). UScan selbst baut keine Internetverbindung auf.
 
-## 2. Module (Projektstruktur)
+## 2. Projekte
 
 | Projekt | Inhalt | Status |
 |---|---|---|
-| `src/UScan.Core` | plattformneutrale Logik | ✅ |
-| ├ `Model/` | `Verdict`, `FileScanResult`, `ScanReport`, `ScanProgress`, `EngineInfo` | ✅ |
-| ├ `Engines/IScanEngine` | Engine-Abstraktion (Stream → Ergebnis) | ✅ |
-| ├ `Engines/ClamAV/` | `ClamdEngine` (TCP, INSTREAM, VERSION, PING), `ClamdResponseParser` | ✅ |
-| ├ `Hashing/` | `HashingReadStream` – SHA-256 im selben Lesedurchgang | ✅ |
-| ├ `Scanning/` | `ScanRunner` (Aufzählung, Parallelität, Abbruch, Fehler), `ZipLimitInspector` | ✅ |
-| └ `Status/` | `StatusEvaluator` – leitet den Dashboard-Status aus Fakten ab | ✅ |
-| `src/UScan.Cli` | Kommandozeile `uscan status` / `uscan scan` | ✅ |
-| `src/UScan.Windows` | Authenticode, Autostart/Dienste/Aufgaben-Inventar, Defender-Adapter, AMSI | 🟡 Phase 3 (nur mit Windows-Testumgebung) |
-| `src/UScan.Service` | Windows-Dienst, IPC, Quarantäne, Zeitplan | 🟡 Phase 3 |
-| `src/UScan.App` | WPF-Oberfläche | 🟡 Phase 4 |
-| `tests/UScan.Core.Tests` | Unit- und Integrationstests (echter `clamd`) | ✅ |
+| `src/UScan.Core` (net10.0) | plattformneutrale Logik | ✅ |
+| ├ `Engines/` | `IScanEngine` (Stream), `IFileScanEngine` (Datei, Zweitmeinung), `ClamdEngine` | ✅ |
+| ├ `Scanning/` | `ScanRunner`, `ZipLimitInspector`, `ScanPlanner` (Schnell/Voll/Autostart/Benutzerdefiniert) | ✅ |
+| ├ `Heuristics/` | `PeAnalyzer`, `ScriptAnalyzer` (inkl. Office-Makros), `HeuristicScorer` | ✅ |
+| ├ `Quarantine/` | `QuarantineStore`, `QuarantineCrypto` (AES-256-GCM, Chunks), Schutzliste | ✅ |
+| ├ `Inventory/` | Modelle, `CommandLineResolver`, `InventoryEntryFactory`, `InventoryDiff` | ✅ |
+| ├ `Monitoring/` | `FileWatchService`, `ChangeDebouncer`, `MassChangeDetector`, `AutostartMonitor`, `MonitorHeartbeat` | ✅ |
+| ├ `Updates/` | `FreshclamUpdater`, `UpdateVerifier`, `StagedInstaller` | ✅ |
+| ├ `Status/` | `StatusEvaluator` (7 Zustände) | ✅ |
+| ├ `Storage/` | `AppPaths`, `JsonLinesEventLog` (rotierend), `ReportStore`, `AtomicFile` | ✅ |
+| └ `App/` | `UScanHost`, `UScanSettings`, `IPlatformServices` | ✅ |
+| `src/UScan.Windows` (net10.0-windows) | `AuthenticodeVerifier`, Inventarquellen (Registry, Startup, Dienste, Aufgaben), `DefenderEngine`, `DefenderStatusProvider`, `WindowsPlatformServices` | ✅ |
+| `src/UScan.Cli` (net10.0 + net10.0-windows) | Kommandozeile `uscan` | ✅ |
+| `src/UScan.Desktop` (WPF) | Oberfläche `UScan.exe` | ✅ |
+| `tests/UScan.Core.Tests` | Unit-, Protokoll-, Integrations- (echter clamd) und End-to-End-Tests der CLI | ✅ |
+| `tests/UScan.Windows.Tests` | Tests gegen echte Windows-APIs, Defender, Fehlalarm-Messung, ViewModels | ✅ (nur Windows) |
 
 ## 3. Zentrale Schnittstellen
 
 ```csharp
-public interface IScanEngine
+public interface IScanEngine            // ClamAV
 {
     string Id { get; }
-    long MaxStreamBytes { get; }                 // größere Dateien: Skipped/TooLarge, nie "Clean"
+    long MaxStreamBytes { get; }          // größere Dateien: Skipped/TooLarge, nie "Clean"
     Task<EngineInfo> GetInfoAsync(CancellationToken ct);
     Task<EngineResult> ScanAsync(Stream content, CancellationToken ct);
 }
+
+public interface IFileScanEngine        // Defender als Zweitmeinung
+{
+    string Id { get; }
+    Task<EngineResult> ScanFileAsync(string path, CancellationToken ct);
+}
+
+public interface IHeuristicAnalyzer
+{
+    bool CanAnalyze(string path, ReadOnlySpan<byte> header);
+    HeuristicResult Analyze(string path, Stream content);   // gewichtete Merkmale + Begründung
+}
+
+public interface IInventorySource { string Name { get; } IEnumerable<InventoryEntry> Collect(ICollection<string> errors); }
+
+public interface IPlatformServices      // Windows: WindowsPlatformServices, sonst GenericPlatformServices
+{
+    ISignatureVerifier Signatures { get; }
+    IFileProtectionPolicy ProtectionPolicy { get; }
+    IReadOnlyList<IInventorySource> CreateInventorySources(InventoryEntryFactory f);
+    IFileScanEngine? CreateSecondOpinion();
+    OnAccessProtection QueryOnAccessProtection();   // Active: true/false/null (= unbekannt)
+}
 ```
 
-Geplante Erweiterungen (Phase 3), jeweils mit eigener Testsuite:
+## 4. Ablauf eines Scans
 
-* `IReputationProvider` – nur SHA-256, nur bei Opt-in, Ergebnis `Known-Bad | Known-Good | Unknown` („Unbekannt“ ist nie „gefährlich“).
-* `IHeuristicAnalyzer` – liefert gewichtete Merkmale mit Begründungstext; eine Warnung entsteht erst ab einer Schwelle aus mehreren unabhängigen Merkmalen.
-* `IInventorySource` – Autostart (Run/RunOnce, Startup-Ordner), Dienste, geplante Aufgaben; jeweils mit Pfad, Hersteller, Authenticode-Status, Hash.
-* `IQuarantineStore` – siehe Abschnitt 5.
+1. `ScanPlanner` erzeugt den Plan (Wurzeln, Tiefenlimit, Hinweise, was **nicht** abgedeckt ist).
+2. `ScanRunner` fragt die Engine-Version ab. Nicht erreichbar → Bericht `Aborted`, keine Datei wird als sauber gemeldet.
+3. Aufzählung ohne Reparse-Points, mit Tiefenlimit; Zugriffsfehler je Verzeichnis werden als Hinweis erfasst.
+4. Jede Datei wird einmal gelesen: Bytes gehen gleichzeitig in SHA-256 und an clamd.
+5. Ergebnis „sauber“ bei Archiven → `ZipLimitInspector` prüft, ob ClamAV wegen Grenzen still gekürzt hat → ggf. „Unvollständig“.
+6. Ergebnis „sauber“ und Datei ≤ 64 MB → Heuristiken; Punktzahl ≥ 60 aus mindestens zwei Merkmalen → „Verdächtig“ mit Begründung.
+7. „Infiziert“/„Verdächtig“ → Defender prüft dieselbe Datei. Defender kann „Verdächtig“ zu „Infiziert“ hochstufen, aber nie einen Fund aufheben.
+8. Bericht wird atomar gespeichert, Funde landen im Ereignisprotokoll.
 
-## 4. Datenfluss eines Scans (implementiert)
+## 5. Quarantäne (umgesetzt)
 
-1. `ScanRunner` fragt `GetInfoAsync`. Engine nicht erreichbar → Bericht `Aborted`, **keine** Datei wird als sauber gemeldet.
-2. Ein Producer zählt Dateien auf (eigener Stack, Tiefenlimit, keine Reparse-Points/Symlinks, Zugriffsfehler je Verzeichnis als `ScanIssue`).
-3. Consumer (konfigurierbare Parallelität) öffnen jede Datei **nur lesend** mit `FileShare.ReadWrite | Delete`, lesen sie **einmal**: die Bytes gehen gleichzeitig in SHA-256 und an `clamd`.
-4. Das `clamd`-Ergebnis wird übersetzt: Signatur → `Infected`; andere `Heuristics.*` → `Suspicious`; Limit/Verschlüsselung → `Incomplete`; alles Unbekannte → `Error`.
-5. Ein „sauberes“ ZIP wird zusätzlich gegen die Engine-Grenzen geprüft (siehe 01, Abschnitt 4).
-6. Fortschritt wird ausschließlich aus erledigten Dateien berechnet; ein Prozentwert existiert erst, wenn die Aufzählung abgeschlossen ist.
-7. Abbruch → `Cancelled`, nicht bearbeitete Dateien werden als Anzahl ausgewiesen, nicht als sauber.
+* Ablage: `%LOCALAPPDATA%\UScan\quarantine` (pro Benutzer).
+* Verschlüsselung: AES-256-GCM in 64-KB-Blöcken, zufälliger Schlüssel und Nonce je Objekt, Blockindex und „letzter Block“ in den Zusatzdaten (verhindert Abschneiden und Vertauschen). Zweck ist **Unschädlichmachen und Integrität**, nicht Geheimhaltung: der Schlüssel liegt in den Metadaten daneben.
+* Ablauf: Kopie verschlüsseln → zurücklesen und prüfen → Original im eigenen Ordner umbenennen → erneut hashen → nur bei Gleichheit löschen. Weicht etwas ab, bleibt das Original erhalten und der Zustand heißt `OriginalNotRemoved`.
+* Schutzliste: Windows, Programme, ProgramData\Microsoft, Recovery, Boot – nur mit ausdrücklicher Admin-Bestätigung.
+* Wiederherstellung: authentifiziert entschlüsseln, erneut scannen (Fund → Ablehnung, außer der Nutzer bestätigt einen Fehlalarm), kein Reparse-Point im Zielpfad, kein Überschreiben, Temp-Datei + Umbenennen.
 
-## 5. Quarantäne (Entwurf für Phase 3)
+## 6. Überwachung (umgesetzt, mit Grenzen)
 
-* Ablage unter `%ProgramData%\UScan\Quarantine`, ACL: nur `SYSTEM` und Administratoren, Vererbung getrennt.
-* Datei wird über ein **bereits geöffnetes Handle** gelesen (keine erneute Pfadauflösung → TOCTOU), mit zufälligem Schlüssel per AES-GCM verschlüsselt (verhindert versehentliches Ausführen und Fremdscanner-Alarme, bietet Integritätsprüfung), dann als `<GUID>.bin` + signierte Metadaten (`Originalpfad`, SHA-256, Erkennung, Engine-Version, Zeit) geschrieben; erst nach erfolgreichem `Flush` wird das Original gelöscht (Löschen über dasselbe Handle via `FILE_DISPOSITION_INFO`).
-* **Schutzliste:** Dateien unter `%SystemRoot%`, signiert von Microsoft, oder in `WinSxS` werden nie automatisch verschoben; nur nach Bestätigung durch einen Administrator und mit Hinweis.
-* **Wiederherstellung:** erneuter Scan des Inhalts, Prüfung des Zielpfads (kein Reparse-Point in der Kette, Zielordner existiert, Datei existiert nicht), Schreiben in temporäre Datei + atomares Umbenennen.
-* Standardaktion bei Funden ist **„In Quarantäne verschieben“**, nie „Löschen“; endgültiges Löschen nur aus der Quarantäne mit Bestätigung.
-
-## 6. Echtzeit- und Verhaltensmodul (Entwurf, ehrliche Abgrenzung)
-
-| Fähigkeit | Technik | Was es **nicht** kann |
+| Fähigkeit | Technik | Grenze |
 |---|---|---|
-| Neue/geänderte Dateien nachscannen | `ReadDirectoryChangesW` bzw. USN-Journal (Admin) | Ausführung **nicht verhindern**; Prüfung erfolgt nach dem Schreiben |
-| Massenänderungen erkennen (Ransomware-Indiz) | Änderungsrate + Entropieanstieg je Prozess/Ordner | Prozess nicht zuverlässig stoppen, bevor Dateien betroffen sind |
-| Prozessketten | ETW-Provider `Microsoft-Windows-Kernel-Process` (Admin) | Kernel-Rootkits, die ETW manipulieren |
-| Autostart-Änderungen | Registry-Benachrichtigung `RegNotifyChangeKeyValue`, Vergleich mit Baseline | Persistenz außerhalb der abgefragten Orte |
+| Nachscan geänderter Dateien | `FileSystemWatcher` (ReadDirectoryChangesW), Entprellung 2 s, Wiederholung bei gesperrten Dateien | **blockiert nicht**; Pufferüberlauf → Warnung „manuell scannen“ |
+| Massenänderungen | verschiedene Dateien je 60 s, Schwelle 300 | nur Hinweis, kein Stoppen von Prozessen, kein Prozessbezug |
+| Autostart-Änderungen | Inventar-Vergleich mit gespeicherter Baseline (Standard alle 15 min) | Polling, Änderungen werden nicht rückgängig gemacht |
+| Laufzeitstatus | Heartbeat-Datei, die andere Prozesse (Status, Oberfläche) lesen | nur, solange `uscan watch` oder die Oberfläche läuft |
 
-Echte Echtzeit-**Blockierung** übernimmt Defender. UScan empfiehlt (ohne selbst umzuschalten) „Überwachter Ordnerzugriff“ in Windows-Sicherheit als Ransomware-Schutz.
+## 7. Updates (umgesetzt)
 
-## 7. Updates (Entwurf)
-
-* **Signaturen:** `freshclam` (prüft die digitale Signatur der CVD-Dateien von Cisco Talos). UScan überwacht Alter und Version und meldet „Update erforderlich“.
-* **Programm:** Update-Manifest im Format von *The Update Framework* (TUF) oder gleichwertig: signierte Metadaten mit Versionsnummer (Downgrade-Schutz), Ablaufdatum (Freeze-Schutz), SHA-256 der Pakete. Root-Schlüssel offline/HSM, Signierschlüssel getrennt und rotierbar, keine Schlüssel im Quellcode. Installation in Seitenverzeichnis, Umschalten erst nach erfolgreichem Selbsttest, Rollback auf vorheriges Verzeichnis. Zusätzlich Authenticode-Signatur der Binärdateien.
+* **Signaturen:** `freshclam` lädt von den offiziellen Mirrors und prüft die digitale Signatur jeder Datenbank. UScan wertet die dokumentierten Rückgabecodes aus (z. B. 52 Netzwerk, 54 Signaturprüfung fehlgeschlagen).
+* **Programm:** Manifest (JSON) mit Produkt, Kanal, Version, Veröffentlichungs- und Ablaufdatum, Schlüssel-ID und SHA-256/Größe des Pakets; abgesetzte ECDSA-P-256-Signatur. Prüfung: Signatur → Produkt/Kanal → Version > installiert → nicht abgelaufen → Paket-Hash/-Größe. Installation in `versions/<v>`, Umschalten erst nach Selbsttest, `previous.txt` für Rollback; Entpacken mit Schutz gegen Pfad-Traversal, Links und Größenbomben.
+* Ein Download-Client ist bewusst **nicht** eingebaut (siehe Roadmap); Updates werden heute als Dateien übergeben.

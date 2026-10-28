@@ -1,50 +1,57 @@
-# UScan – Anti-Malware-Scanner für Windows (in Entwicklung)
+# UScan – Malware-Scanner für Windows 10/11
 
-UScan soll eine überprüfbare, mehrschichtige Anti-Malware-Anwendung für Windows 10/11 (x64) werden. Dieser Stand ist **Phase 1 plus der plattformneutrale Teil von Phase 2**: Analyse, Architektur, Bedrohungsmodell und ein kleiner, getesteter Scan-Kern mit Kommandozeile.
+UScan ist ein überprüfbarer, mehrschichtiger Malware-Scanner für Windows 10/11 (x64) mit Oberfläche (WPF) und Kommandozeile. Er nutzt ClamAV als Signatur-Engine, eigene Heuristiken mit Begründung, Microsoft Defender als Zweitmeinung, eine verschlüsselte Quarantäne, ein Autostart-Inventar mit Signaturprüfung und eine Dateiüberwachung, die geänderte Dateien nachscannt.
 
-> **Wichtig:** UScan ist in diesem Stand **kein** Ersatz für Microsoft Defender und bietet **keinen** Echtzeitschutz, keine Quarantäne und keine Oberfläche. Was implementiert ist und was nicht, steht in [docs/05-FUNKTIONSSTATUS.md](docs/05-FUNKTIONSSTATUS.md).
+> **Ehrliche Einordnung:** UScan **ergänzt** Microsoft Defender, ersetzt ihn aber nicht. UScan hat keinen Kernel-Treiber und kann deshalb Dateizugriffe **nicht blockieren**; die Überwachung prüft Dateien kurz *nach* einer Änderung. Den blockierenden Echtzeitschutz liefert Defender, den UScan nie abschaltet. Was genau implementiert und getestet ist, steht in [docs/05-FUNKTIONSSTATUS.md](docs/05-FUNKTIONSSTATUS.md).
 
-## Was heute funktioniert (getestet)
+## Funktionen (implementiert und automatisiert getestet)
 
-* On-Demand-Scan von Dateien/Ordnern über ClamAV (`clamd`, INSTREAM-Protokoll)
-* SHA-256 jeder geprüften Datei im selben Lesedurchgang
-* Ehrliche Ergebnisse: *Infiziert*, *Verdächtig*, *Unvollständig geprüft*, *Übersprungen*, *Fehler*, *Ohne Befund*
-* Archive: Erkennung in (verschachtelten) ZIPs, Grenzen gegen ZIP-Bomben, kontrollierte Behandlung defekter Archive
-* Keine Verfolgung von Symlinks/Reparse-Points, Abbruch, Engine-Ausfall, Zugriffsfehler
-* Statuslogik, die nie „Geschützt“ meldet, wenn etwas fehlt
-* JSON-Bericht, definierte Exit-Codes
+| Bereich | Was UScan macht |
+|---|---|
+| Signaturen | Scan über ClamAV (`clamd`, nur Dateiinhalt per INSTREAM, nie Pfade); Signatur-Updates über `freshclam` mit Auswertung der Fehlercodes |
+| Archive | Erkennung in verschachtelten Archiven; Grenzen gegen ZIP-Bomben; „unvollständig geprüft“ statt falschem „sauber“ |
+| Heuristik | PE-Dateien (Sektionen, Entropie, Importe, Packer, Signatur, Ort), Skripte (PowerShell, VBS, JS, Batch, HTA) und Office-Makros; Ergebnis höchstens „verdächtig“, immer mit Begründung |
+| Zweitmeinung | Microsoft Defender (`MpCmdRun -DisableRemediation`) prüft jeden Fund nach, ohne selbst etwas zu verändern |
+| Quarantäne | AES-256-GCM-verschlüsselt, Original wird erst nach verifizierter Kopie entfernt, Wiederherstellung nur nach erneutem Scan und ohne Überschreiben, Schutzliste für Systemordner |
+| System | Autostart (Registry, Startup-Ordner, Winlogon, IFEO, AppInit), Dienste, geplante Aufgaben – mit Authenticode-/Katalogsignatur und Erkennung von Änderungen |
+| Überwachung | Nachscan neuer/geänderter Dateien in gewählten Ordnern, Hinweis bei Massenänderungen (mögliches Ransomware-Anzeichen), Autostart-Änderungen |
+| Scan-Modi | Schnell, Vollständig, Autostart, Ordner/Dateien |
+| Status | Sieben Zustände; „Geschützt“ nur, wenn jede Voraussetzung nachweislich erfüllt ist |
+| Updates | Programm-Updates nur mit ECDSA-P-256-signiertem Manifest (Downgrade-/Freeze-Schutz), Installation nebeneinander mit Selbsttest und Rollback |
+| Datenschutz | Alles lokal, keine Telemetrie, keine Datei-Uploads |
 
 ## Dokumentation
 
 1. [Analyse, Supportstatus, Technologiewahl](docs/01-ANALYSE-UND-PLATTFORM.md)
 2. [Architektur](docs/02-ARCHITEKTUR.md)
 3. [Bedrohungsmodell](docs/03-BEDROHUNGSMODELL.md)
-4. [Implementierungsplan und Abnahmekriterien](docs/04-IMPLEMENTIERUNGSPLAN.md)
-5. [Funktionsstatus](docs/05-FUNKTIONSSTATUS.md)
-6. [Teststrategie und Testergebnisse](docs/06-TESTERGEBNISSE.md)
+4. [Implementierungsplan und Abnahme](docs/04-IMPLEMENTIERUNGSPLAN.md)
+5. [Funktionsstatus: implementiert / nicht implementiert](docs/05-FUNKTIONSSTATUS.md)
+6. [Tests, Messungen und tatsächliche Ergebnisse](docs/06-TESTERGEBNISSE.md)
 7. [Lizenzen](docs/07-LIZENZEN.md)
+8. [Installation, Start, Bedienung, Updates](docs/08-INSTALLATION-UND-BEDIENUNG.md)
+9. [Schlüsselverwaltung für Programm-Updates](docs/09-SCHLUESSELVERWALTUNG.md)
+10. [Bekannte Probleme und Roadmap](docs/10-BEKANNTE-PROBLEME-UND-ROADMAP.md)
+
+## Schnellstart (Windows)
+
+1. [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) und [ClamAV für Windows](https://www.clamav.net/downloads) installieren, Signaturen mit `freshclam` laden und `clamd` starten (Schritt für Schritt in [docs/08](docs/08-INSTALLATION-UND-BEDIENUNG.md)).
+2. Repository holen und starten:
+   ```powershell
+   git clone https://github.com/Uleimon/UScan.git
+   cd UScan
+   dotnet run --project src/UScan.Desktop            # Oberfläche
+   dotnet run --project src/UScan.Cli -f net10.0-windows -- status   # Kommandozeile
+   ```
 
 ## Bauen und testen
 
-Voraussetzungen: .NET SDK 10, optional ClamAV ≥ 1.4 (für Integrationstests und echte Scans).
-
 ```bash
 dotnet build
-dotnet test          # Integrationstests starten einen eigenen clamd; ohne ClamAV werden sie übersprungen
+dotnet test     # Integrationstests starten einen eigenen clamd mit Test-Signatur; ohne ClamAV werden sie als übersprungen gemeldet
 ```
 
-Windows: ClamAV über das offizielle Installationspaket von clamav.net installieren und bei Bedarf
-`set USCAN_CLAMD=C:\Program Files\ClamAV\clamd.exe` setzen.
-
-## Benutzen (Kommandozeile)
-
-1. ClamAV installieren, `freshclam` ausführen (offizielle Signaturen), `clamd` mit [config/clamd.conf.example](config/clamd.conf.example) starten.
-2. ```bash
-   dotnet run --project src/UScan.Cli -- status
-   dotnet run --project src/UScan.Cli -- scan C:\Users\me\Downloads --json bericht.json
-   ```
-
-Exit-Codes: `0` nichts gefunden · `1` Funde · `2` unvollständig/Fehler/abgebrochen · `3` Engine nicht erreichbar · `64` falscher Aufruf.
+Die GitHub-Actions-CI baut und testet auf Linux und Windows (mit echtem ClamAV, Defender und Windows-APIs) und startet die Oberfläche einmal zur Kontrolle.
 
 ## Testdateien
 
