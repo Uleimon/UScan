@@ -9,6 +9,8 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- WPF code-behind and view models are internal by design; CA1515 would only add noise. -->
     <NoWarn>$(NoWarn);CA1515</NoWarn>
+    <!-- WPF text layout needs real culture data (XmlLanguage.GetSpecificCulture throws in invariant mode). -->
+    <InvariantGlobalization>false</InvariantGlobalization>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../UScan.Core/UScan.Core.csproj" />

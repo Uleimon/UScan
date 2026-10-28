@@ -5,6 +5,7 @@
     <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
     <UseWPF>true</UseWPF>
+    <InvariantGlobalization>false</InvariantGlobalization>
     <NoWarn>$(NoWarn);CA1707;CA2007;CA1515;CA1861;CA5394;CA1063;CA1816</NoWarn>
   </PropertyGroup>
   <ItemGroup>
