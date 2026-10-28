@@ -12,7 +12,7 @@ Beide enthalten `UScan.exe` (Oberfläche), `uscan-cli.exe` (Kommandozeile; im Pa
 
 Gebaut werden die Pakete von `.github/workflows/release.yml` (bei einem Tag `v*`). Die CI testet dabei das veröffentlichte Programm selbst: Oberflächen-Selbsttest, EICAR-Fund der Kommandozeile mit echtem `clamd`, stille Installation, Start und Deinstallation.
 
-Neue Version veröffentlichen: Version in `Directory.Build.props` erhöhen, dann `git tag v0.5.1 && git push origin v0.5.1`.
+Neue Version veröffentlichen: Version in `Directory.Build.props` erhöhen, dann entweder `git tag v0.5.1 && git push origin v0.5.1` oder auf GitHub unter *Releases → Draft a new release* den Tag `v0.5.1` neu anlegen und veröffentlichen. Die CI hängt Setup, ZIP und Prüfsummen nach etwa 5 Minuten an das Release an.
 
 Ohne Paket wird UScan aus dem Quellcode gebaut (Abschnitt 3). Alle Schritte laufen mit normalen Benutzerrechten, außer der ClamAV-Installation.
 
