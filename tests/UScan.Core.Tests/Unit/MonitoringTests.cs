@@ -206,3 +206,24 @@ public class AutostartMonitorTests
         Assert.False(monitor.Check().BaselineCreated);
     }
 }
+
+public class MonitorHeartbeatTests
+{
+    [Fact]
+    public void Fresh_heartbeat_is_active_stale_or_missing_is_not()
+    {
+        using var dir = new TempDir();
+        var file = Path.Combine(dir.Path, "run", "monitor.heartbeat");
+        var time = new FakeTimeProvider(new DateTimeOffset(2026, 10, 28, 12, 0, 0, TimeSpan.Zero));
+        Assert.Null(MonitorHeartbeat.ReadActive(file, time));
+
+        MonitorHeartbeat.Write(file, ["C:\\Users\\a\\Downloads"], time);
+        Assert.Equal(["C:\\Users\\a\\Downloads"], MonitorHeartbeat.ReadActive(file, time));
+
+        time.Advance(TimeSpan.FromMinutes(5));
+        Assert.Null(MonitorHeartbeat.ReadActive(file, time));
+
+        MonitorHeartbeat.Clear(file);
+        Assert.False(File.Exists(file));
+    }
+}

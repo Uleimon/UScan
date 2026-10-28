@@ -430,3 +430,50 @@ public sealed class FileWatchService : IAsyncDisposable
     private void Log(EventSeverity severity, string message, string? path = null, string? detail = null) =>
         _log?.Append(new SecurityEvent(_time.GetUtcNow(), severity, "monitor", message, path, detail));
 }
+
+/// <summary>
+/// Lets other processes (CLI status, UI) see whether a monitor process is alive: the monitor
+/// rewrites the file periodically; a missing or stale file means "not running".
+/// </summary>
+public static class MonitorHeartbeat
+{
+    public static readonly TimeSpan Interval = TimeSpan.FromSeconds(30);
+
+    public static void Write(string file, IReadOnlyList<string> roots, TimeProvider? time = null)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(file))!);
+        var stamp = (time ?? TimeProvider.System).GetUtcNow().ToUnixTimeSeconds();
+        AtomicFile.WriteAllBytes(file, System.Text.Encoding.UTF8.GetBytes($"{stamp}\n{string.Join('\n', roots)}"));
+    }
+
+    public static void Clear(string file)
+    {
+        try
+        {
+            File.Delete(file);
+        }
+        catch (IOException)
+        {
+        }
+    }
+
+    /// <returns>The watched roots if the heartbeat is fresh, otherwise null.</returns>
+    public static IReadOnlyList<string>? ReadActive(string file, TimeProvider? time = null)
+    {
+        try
+        {
+            var lines = File.ReadAllLines(file);
+            if (lines.Length == 0 || !long.TryParse(lines[0], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var stamp))
+            {
+                return null;
+            }
+
+            var age = (time ?? TimeProvider.System).GetUtcNow() - DateTimeOffset.FromUnixTimeSeconds(stamp);
+            return age >= -TimeSpan.FromMinutes(1) && age <= Interval * 3 ? lines[1..] : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+}

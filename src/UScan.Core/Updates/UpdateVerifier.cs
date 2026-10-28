@@ -92,7 +92,9 @@ public sealed class UpdateVerifier
             return Reject($"Manifest is signed with unknown key '{m.KeyId}'.");
         }
 
-        if (!key.VerifyData(manifestBytes, signature, HashAlgorithmName.SHA256))
+        // Accept both the raw r||s form (.NET default) and DER (as produced by `openssl dgst -sign`).
+        if (!key.VerifyData(manifestBytes, signature, HashAlgorithmName.SHA256, DSASignatureFormat.IeeeP1363FixedFieldConcatenation)
+            && !key.VerifyData(manifestBytes, signature, HashAlgorithmName.SHA256, DSASignatureFormat.Rfc3279DerSequence))
         {
             return Reject("Signature verification failed.");
         }

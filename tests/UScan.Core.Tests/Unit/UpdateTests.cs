@@ -47,6 +47,14 @@ public sealed class UpdateVerifierTests : IDisposable
     }
 
     [Fact]
+    public void Der_encoded_signature_is_accepted()
+    {
+        var m = Manifest();
+        var der = _releaseKey.SignData(m, HashAlgorithmName.SHA256, DSASignatureFormat.Rfc3279DerSequence);
+        Assert.True(Verifier().Verify(m, der).Accepted);
+    }
+
+    [Fact]
     public void Modified_manifest_is_rejected()
     {
         var m = Manifest();
