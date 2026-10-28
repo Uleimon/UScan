@@ -13,6 +13,10 @@
 
 Testdaten: ausschließlich harmlos. EICAR wird zur Laufzeit zusammengesetzt; ZIP-Bomben bestehen aus Nullbytes; „verdächtige“ PE-Dateien werden im Test synthetisch erzeugt und nie ausgeführt. **Keine echte Malware.**
 
+## Nachtrag Version 0.5.1
+
+Neu: Verbindungsverlust zu `clamd` bricht den Scan nicht mehr sofort ab. UScan prüft bis zu sechsmal im Abstand von 5 s, ob die Engine wieder antwortet, und scannt die betroffene Datei dann erneut; bricht `clamd` bei derselben Datei erneut ab, wird nur diese Datei als „Fehler“ gemeldet. Ist die Engine nach den Versuchen nicht erreichbar, wird der Scan wie bisher als abgebrochen gemeldet, jetzt mit dem Grund im Protokoll. Anlass: Ein vollständiger Scan auf einem echten Windows-PC brach nach 235 331 von 236 358 Dateien ab. Tests: Linux 180/180 (2 neue in ScanRunnerTests).
+
 ## Ergebnisse vom 28.10.2026 (Version 0.5.0)
 
 ### Linux (Entwicklungsumgebung und CI)
@@ -34,7 +38,7 @@ dotnet list package --vulnerable --include-transitive  →  keine bekannten Schw
 | MonitoringTests | 11 |
 | QuarantineTests | 14 |
 | ScanPlannerTests | 3 |
-| ScanRunnerTests | 11 |
+| ScanRunnerTests | 13 |
 | StatusEvaluatorTests | 9 |
 | StorageTests | 7 |
 | UpdateTests | 19 |
