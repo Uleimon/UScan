@@ -16,6 +16,8 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/UScan.Core/UScan.Core.csproj" />
+    <!-- Built first so the end-to-end tests can run the real command line program. -->
+    <ProjectReference Include="../../src/UScan.Cli/UScan.Cli.csproj" ReferenceOutputAssembly="false" SetTargetFramework="TargetFramework=net10.0" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />

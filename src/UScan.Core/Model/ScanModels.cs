@@ -57,8 +57,10 @@ public sealed record FileScanResult(
     string? Message,
     TimeSpan Duration)
 {
-    /// <summary>The detection name of the first engine that produced a non-clean verdict.</summary>
-    public string? DetectionName => EngineResults.FirstOrDefault(r => r.DetectionName is not null)?.DetectionName;
+    /// <summary>Detection name of the engine that determined the final verdict (falls back to any named detection).</summary>
+    public string? DetectionName =>
+        EngineResults.FirstOrDefault(r => r.Verdict == Verdict && r.DetectionName is not null)?.DetectionName
+        ?? EngineResults.FirstOrDefault(r => r.DetectionName is not null)?.DetectionName;
 }
 
 /// <summary>

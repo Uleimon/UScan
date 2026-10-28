@@ -126,13 +126,35 @@ public sealed class ClamdEngine : IScanEngine
             if (!sendFailed)
             {
                 BinaryPrimitives.WriteUInt32BigEndian(buffer.AsSpan(0, 4), 0);
-                await net.WriteAsync(buffer.AsMemory(0, 4), ct).ConfigureAwait(false);
+                try
+                {
+                    await net.WriteAsync(buffer.AsMemory(0, 4), ct).ConfigureAwait(false);
+                }
+                catch (IOException)
+                {
+                    sendFailed = true;
+                }
             }
 
-            var reply = await ReadReplyAsync(net, ct).ConfigureAwait(false);
+            string reply;
+            try
+            {
+                reply = await ReadReplyAsync(net, ct).ConfigureAwait(false);
+            }
+            catch (IOException) when (sendFailed)
+            {
+                // On Windows a reset discards clamd's pending reply. The connection was closed by clamd
+                // mid-stream, which it does when its StreamMaxLength is exceeded.
+                return new EngineResult(Verdict.Error, Id, null, "clamd closed the connection during INSTREAM (stream probably exceeds StreamMaxLength).");
+            }
+            catch (IOException ex)
+            {
+                throw new EngineUnavailableException($"clamd connection failed: {ex.Message}", ex);
+            }
+
             if (sendFailed && reply.Length == 0)
             {
-                throw new EngineUnavailableException("clamd closed the connection during INSTREAM without a reply.");
+                return new EngineResult(Verdict.Error, Id, null, "clamd closed the connection during INSTREAM without a reply.");
             }
 
             return ClamdResponseParser.ParseScanReply(reply);

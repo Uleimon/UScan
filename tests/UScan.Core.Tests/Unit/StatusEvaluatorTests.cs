@@ -15,7 +15,8 @@ public class StatusEvaluatorTests
         ScanRunning: false,
         UnresolvedThreats: 0,
         PendingActions: 0,
-        RealTimeMonitoringActive: true);
+        OnAccessProtectionActive: true,
+        FileMonitorActive: true);
 
     [Fact]
     public void All_good_is_protected() =>
@@ -42,9 +43,12 @@ public class StatusEvaluatorTests
     [Fact]
     public void Missing_real_time_component_limits_protection()
     {
-        var a = _eval.Evaluate(Good() with { RealTimeMonitoringActive = null });
+        var a = _eval.Evaluate(Good() with { OnAccessProtectionActive = null });
         Assert.Equal(ProtectionState.ProtectionLimited, a.State);
-        Assert.Contains(a.Reasons, r => r.Contains("not implemented", StringComparison.Ordinal));
+        Assert.Contains(a.Reasons, r => r.Contains("unknown", StringComparison.Ordinal));
+
+        var b = _eval.Evaluate(Good() with { OnAccessProtectionActive = false });
+        Assert.Contains(b.Reasons, r => r.Contains("cannot block", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -74,8 +78,10 @@ public class StatusEvaluatorTests
             Good() with { Engine = Good().Engine! with { DatabaseTimestamp = Now.AddDays(-30) } },
             Good() with { UnresolvedThreats = 1 },
             Good() with { PendingActions = 1 },
-            Good() with { RealTimeMonitoringActive = false },
-            Good() with { RealTimeMonitoringActive = null },
+            Good() with { OnAccessProtectionActive = false },
+            Good() with { OnAccessProtectionActive = null },
+            Good() with { FileMonitorActive = false },
+            Good() with { FileMonitorActive = null },
         };
         Assert.All(bad, i => Assert.NotEqual(ProtectionState.Protected, _eval.Evaluate(i).State));
     }

@@ -1,6 +1,6 @@
 # UScan – gehärtete clamd-Konfiguration (Beispiel)
-# Die Grenzwerte MÜSSEN zu den UScan-Optionen passen
-# (--max-stream-mb, --max-file-mb, --max-scan-mb, --max-files), sonst
+# Die Grenzwerte MÜSSEN zu %LOCALAPPDATA%\UScan\settings.json passen
+# (maxStreamMb, archiveMaxFileMb, archiveMaxScanMb, archiveMaxFiles), sonst
 # kann UScan unvollständige Archivprüfungen nicht korrekt ausweisen.
 
 # Nur lokal erreichbar. UScan sendet Dateiinhalte per INSTREAM.
@@ -9,7 +9,7 @@ TCPAddr 127.0.0.1
 
 # Windows: Pfade anpassen, z. B.
 # DatabaseDirectory "C:\Program Files\ClamAV\database"
-# LogFile "C:\ProgramData\UScan\Logs\clamd.log"
+# LogFile "C:\Program Files\ClamAV\clamd.log"
 LogTime yes
 LogFileMaxSize 10M
 

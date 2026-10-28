@@ -20,7 +20,8 @@ public sealed record StatusInputs(
     bool ScanRunning,
     int UnresolvedThreats,
     int PendingActions,
-    bool? RealTimeMonitoringActive);
+    bool? OnAccessProtectionActive,
+    bool? FileMonitorActive);
 
 public sealed record StatusAssessment(ProtectionState State, IReadOnlyList<string> Reasons);
 
@@ -91,13 +92,24 @@ public sealed class StatusEvaluator
             }
         }
 
-        if (inputs.RealTimeMonitoringActive is null)
+        // On-access (blocking) protection comes from Microsoft Defender or another registered
+        // antivirus; UScan has no driver of its own and therefore cannot provide it.
+        if (inputs.OnAccessProtectionActive is null)
         {
-            Raise(ProtectionState.ProtectionLimited, "Real-time monitoring is not implemented in this version.");
+            Raise(ProtectionState.ProtectionLimited, "State of on-access protection (Microsoft Defender real-time protection) is unknown.");
         }
-        else if (inputs.RealTimeMonitoringActive == false)
+        else if (inputs.OnAccessProtectionActive == false)
         {
-            Raise(ProtectionState.ProtectionLimited, "Real-time monitoring is switched off.");
+            Raise(ProtectionState.ProtectionLimited, "On-access protection (Microsoft Defender real-time protection) is off. UScan cannot block files itself.");
+        }
+
+        if (inputs.FileMonitorActive is null)
+        {
+            Raise(ProtectionState.ProtectionLimited, "State of UScan file monitoring is unknown.");
+        }
+        else if (inputs.FileMonitorActive == false)
+        {
+            Raise(ProtectionState.ProtectionLimited, "UScan file monitoring (re-scan after change) is not running.");
         }
 
         if (inputs.ScanRunning && state == ProtectionState.Protected)
