@@ -6,7 +6,7 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
     <Deterministic>true</Deterministic>
-    <Version>0.5.0</Version>
+    <Version>0.5.1</Version>
     <InvariantGlobalization>true</InvariantGlobalization>
     <!-- Instance members are kept for API shape and testability. -->
     <NoWarn>$(NoWarn);CA1822</NoWarn>

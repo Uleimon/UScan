@@ -26,6 +26,15 @@ public sealed class ScanOptions
     /// </summary>
     public Engines.IFileScanEngine? SecondOpinion { get; init; }
 
+    /// <summary>
+    /// How often, and how far apart, the engine is pinged after a lost connection before the scan
+    /// is aborted. A single dropped connection (clamd restarting, a paused console window) then
+    /// costs one retry instead of the whole scan.
+    /// </summary>
+    public int EngineRecoveryAttempts { get; init; } = 6;
+
+    public TimeSpan EngineRecoveryDelay { get; init; } = TimeSpan.FromSeconds(5);
+
     /// <summary>Test seam for simulating I/O failures. Production code uses <see cref="OpenForScan"/>.</summary>
     internal Func<string, Stream>? OpenFile { get; init; }
 
@@ -248,17 +257,40 @@ public sealed class ScanRunner
                 return Skipped(path, size, SkipReason.TooLarge);
             }
 
-            await using var hashing = new HashingReadStream((_options.OpenFile ?? ScanOptions.OpenForScan)(path));
-            var engineResult = await _engine.ScanAsync(hashing, ct).ConfigureAwait(false);
-            var sha = await hashing.CompleteAsync(ct).ConfigureAwait(false);
+            (EngineResult Result, long Bytes, string Sha) scanned;
+            try
+            {
+                scanned = await ScanContentAsync(path, ct).ConfigureAwait(false);
+            }
+            catch (EngineUnavailableException first)
+            {
+                // Throws (and so aborts the scan) only if the engine stays unreachable.
+                await WaitForEngineAsync(first, ct).ConfigureAwait(false);
+                try
+                {
+                    scanned = await ScanContentAsync(path, ct).ConfigureAwait(false);
+                }
+                catch (EngineUnavailableException again)
+                {
+                    if (!await IsReachableAsync(ct).ConfigureAwait(false))
+                    {
+                        throw;
+                    }
 
+                    // The engine is up but drops this particular file: report the file, keep scanning.
+                    return new FileScanResult(path, size, null, Verdict.Error, SkipReason.None, [],
+                        $"Engine dropped the connection for this file twice: {again.Message}", sw.Elapsed);
+                }
+            }
+
+            var (engineResult, bytesRead, sha) = scanned;
             if (engineResult.Verdict == Verdict.Clean)
             {
                 engineResult = CheckArchiveCoverage(path, engineResult);
             }
 
             var results = new List<EngineResult> { engineResult };
-            if (engineResult.Verdict == Verdict.Clean && RunHeuristics(path, hashing.BytesRead) is { } heuristic)
+            if (engineResult.Verdict == Verdict.Clean && RunHeuristics(path, bytesRead) is { } heuristic)
             {
                 results.Add(heuristic);
                 engineResult = heuristic;
@@ -274,7 +306,7 @@ public sealed class ScanRunner
                 }
             }
 
-            return new FileScanResult(path, hashing.BytesRead, sha, engineResult.Verdict,
+            return new FileScanResult(path, bytesRead, sha, engineResult.Verdict,
                 engineResult.Verdict == Verdict.Skipped ? SkipReason.TooLarge : SkipReason.None,
                 results, engineResult.Verdict is Verdict.Error or Verdict.Incomplete or Verdict.Suspicious ? engineResult.Detail : null, sw.Elapsed);
         }
@@ -314,6 +346,42 @@ public sealed class ScanRunner
         }
 
         return null;
+    }
+
+    private async Task<(EngineResult Result, long Bytes, string Sha)> ScanContentAsync(string path, CancellationToken ct)
+    {
+        await using var hashing = new HashingReadStream((_options.OpenFile ?? ScanOptions.OpenForScan)(path));
+        var result = await _engine.ScanAsync(hashing, ct).ConfigureAwait(false);
+        var sha = await hashing.CompleteAsync(ct).ConfigureAwait(false);
+        return (result, hashing.BytesRead, sha);
+    }
+
+    private async Task WaitForEngineAsync(EngineUnavailableException cause, CancellationToken ct)
+    {
+        for (var i = 0; i < _options.EngineRecoveryAttempts; i++)
+        {
+            await Task.Delay(_options.EngineRecoveryDelay, _time, ct).ConfigureAwait(false);
+            if (await IsReachableAsync(ct).ConfigureAwait(false))
+            {
+                return;
+            }
+        }
+
+        throw new EngineUnavailableException(
+            $"{cause.Message} (still unreachable after {_options.EngineRecoveryAttempts} attempts, {_options.EngineRecoveryDelay.TotalSeconds:F0} s apart)", cause);
+    }
+
+    private async Task<bool> IsReachableAsync(CancellationToken ct)
+    {
+        try
+        {
+            await _engine.GetInfoAsync(ct).ConfigureAwait(false);
+            return true;
+        }
+        catch (EngineUnavailableException)
+        {
+            return false;
+        }
     }
 
     /// <summary>Downgrades "clean" to "incomplete" when the engine cannot have seen the whole archive.</summary>

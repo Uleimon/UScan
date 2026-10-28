@@ -130,12 +130,50 @@ public class ScanRunnerTests
             dir.Write($"f{i}.txt", "data");
         }
 
-        var report = await new ScanRunner(new FakeEngine { FailAfterScans = 3 }, new ScanOptions { MaxDegreeOfParallelism = 1 })
+        var report = await new ScanRunner(new FakeEngine { FailAfterScans = 3 }, new ScanOptions { MaxDegreeOfParallelism = 1, EngineRecoveryDelay = TimeSpan.Zero })
             .RunAsync([dir.Path], cancellationToken: Ct);
 
         Assert.Equal(ScanOutcome.Aborted, report.Outcome);
-        Assert.Contains(report.Issues, i => i.Message.Contains("crashed", StringComparison.Ordinal));
+        Assert.Contains(report.Issues, i => i.Message.Contains("crashed", StringComparison.Ordinal) && i.Message.Contains("still unreachable after 6 attempts", StringComparison.Ordinal));
         Assert.True(report.FilesNotProcessed > 0);
+    }
+
+    [Fact]
+    public async Task Single_dropped_connection_is_retried_and_the_scan_completes()
+    {
+        using var dir = new TempDir();
+        for (var i = 0; i < 5; i++)
+        {
+            dir.Write($"f{i}.txt", "data");
+        }
+
+        var bad = dir.Write("eicar.com", TestFiles.Eicar);
+        var engine = new FakeEngine { DropScans = new HashSet<int> { 2 } };
+        var report = await new ScanRunner(engine, new ScanOptions { MaxDegreeOfParallelism = 1, EngineRecoveryDelay = TimeSpan.Zero })
+            .RunAsync([dir.Path], cancellationToken: Ct);
+
+        Assert.Equal(ScanOutcome.Completed, report.Outcome);
+        Assert.Equal(6, report.Files.Count);
+        Assert.Equal(0, report.FilesNotProcessed);
+        Assert.Equal(7, engine.Scans);
+        Assert.Equal(Verdict.Infected, Assert.Single(report.Files, f => f.Path == bad).Verdict);
+        Assert.Equal(5, report.CountOf(Verdict.Clean));
+    }
+
+    [Fact]
+    public async Task File_that_the_engine_keeps_dropping_is_an_error_not_clean_and_the_scan_goes_on()
+    {
+        using var dir = new TempDir();
+        var odd = dir.Write("odd.bin", "DROPME");
+        dir.Write("ok.txt", "data");
+        var report = await new ScanRunner(new FakeEngine { AlwaysDropMarker = "DROPME" }, new ScanOptions { EngineRecoveryDelay = TimeSpan.Zero })
+            .RunAsync([dir.Path], cancellationToken: Ct);
+
+        Assert.Equal(ScanOutcome.Completed, report.Outcome);
+        var r = Assert.Single(report.Files, f => f.Path == odd);
+        Assert.Equal(Verdict.Error, r.Verdict);
+        Assert.Contains("twice", r.Message, StringComparison.Ordinal);
+        Assert.Equal(1, report.CountOf(Verdict.Clean));
     }
 
     [Fact]

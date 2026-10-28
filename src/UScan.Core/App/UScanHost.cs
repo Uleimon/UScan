@@ -103,7 +103,9 @@ public sealed class UScanHost
         }
 
         Log.Append(new SecurityEvent(_time.GetUtcNow(), report.Outcome == ScanOutcome.Completed ? EventSeverity.Info : EventSeverity.Warning, "scan",
-            $"{plan.Mode} scan {report.Outcome}: {report.Files.Count} of {report.FilesDiscovered} files, {report.CountOf(Verdict.Infected)} infected, {report.CountOf(Verdict.Suspicious)} suspicious.", null, file));
+            $"{plan.Mode} scan {report.Outcome}: {report.Files.Count} of {report.FilesDiscovered} files, {report.CountOf(Verdict.Infected)} infected, {report.CountOf(Verdict.Suspicious)} suspicious." +
+            (report.Outcome == ScanOutcome.Aborted && report.Issues.FirstOrDefault(i => i.Path == "(engine)") is { } reason ? $" Reason: {reason.Message}" : ""),
+            null, file));
         return (report, file);
     }
 
