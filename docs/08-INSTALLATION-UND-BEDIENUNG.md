@@ -145,6 +145,7 @@ Alles liegt in `%LOCALAPPDATA%\UScan`: `reports\` (Scanberichte), `logs\` (Ereig
 | Meldung | Ursache / Lösung |
 |---|---|
 | Scan „wegen Engine-Fehler abgebrochen“ | `clamd`-Fenster geschlossen oder `clamd` abgestürzt. `clamd` als Dienst mit Neustart-Option einrichten (Abschnitt 2); die Meldung im Protokoll nennt die Datei, bei der die Verbindung verloren ging |
+| Abbruch mit „Socketadresse … nur jeweils einmal verwendet“ | Fehler bis Version 0.5.2: alle lokalen Ports belegt. Ab 0.5.3 behoben, Update installieren |
 | „Scan-Engine NICHT erreichbar“ | `clamd` läuft nicht oder anderer Port. `Get-Service clamd` bzw. Fenster prüfen, Port in `settings.json` |
 | „Keine offizielle Signaturdatenbank erkannt“ | `freshclam` noch nicht gelaufen |
 | „freshclam failed: network connection problem (exit code 52)“ | Internet/Proxy prüfen; Proxy in `freshclam.conf` eintragen |

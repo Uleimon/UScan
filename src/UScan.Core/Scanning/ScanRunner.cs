@@ -275,12 +275,13 @@ public sealed class ScanRunner
                 {
                     if (!await IsReachableAsync(ct).ConfigureAwait(false))
                     {
-                        throw new EngineUnavailableException($"{again.Message} (engine went away again; file being scanned: {path})", again);
+                        // Gone again right after coming back: wait once more, and abort only if it stays away.
+                        await WaitForEngineAsync(again, path, ct).ConfigureAwait(false);
                     }
 
-                    // The engine is up but drops this particular file: report the file, keep scanning.
+                    // The engine is up but this file failed twice: report the file, keep scanning.
                     return new FileScanResult(path, size, null, Verdict.Error, SkipReason.None, [],
-                        $"Engine dropped the connection for this file twice: {again.Message}", sw.Elapsed);
+                        $"The engine connection failed twice for this file: {again.Message}", sw.Elapsed);
                 }
             }
 

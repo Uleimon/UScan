@@ -1,6 +1,10 @@
+using System.Net.NetworkInformation;
+using System.Security.Cryptography;
 using System.Text;
+using UScan.Core.App;
 using UScan.Core.Model;
 using UScan.Core.Scanning;
+using UScan.Core.Storage;
 using UScan.Core.Tests.Support;
 
 namespace UScan.Core.Tests.Integration;
@@ -137,5 +141,44 @@ public class ClamdIntegrationTests(ClamdFixture clamd) : IClassFixture<ClamdFixt
         Assert.Equal(ScanOutcome.Completed, report.Outcome);
         Assert.Equal(45, report.Files.Count);
         Assert.All(report.Files, f => Assert.Equal(Verdict.Clean, f.Verdict));
+    }
+
+    [Fact]
+    public async Task Many_scans_do_not_leave_client_ports_in_time_wait()
+    {
+        // Each scan uses its own connection. If UScan closed first, every scan would park one of its local
+        // ports in TIME_WAIT, and on Windows a full scan of ~200,000 files ran out of ports (WSAEADDRINUSE).
+        SkipIfUnavailable();
+        var engine = clamd.CreateEngine();
+        int ClientTimeWait() => IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpConnections()
+            .Count(c => c.State == TcpState.TimeWait && c.RemoteEndPoint.Port == clamd.Port);
+
+        var before = ClientTimeWait();
+        for (var i = 0; i < 300; i++)
+        {
+            var result = await engine.ScanAsync(new MemoryStream(Encoding.ASCII.GetBytes($"harmless {i}")), Ct);
+            Assert.Equal(Verdict.Clean, result.Verdict);
+        }
+
+        Assert.True(ClientTimeWait() - before < 10, $"{ClientTimeWait() - before} client ports in TIME_WAIT after 300 scans");
+    }
+
+    [Fact]
+    public async Task Detection_the_user_allowed_is_still_reported_but_not_logged_as_threat()
+    {
+        SkipIfUnavailable();
+        using var dir = new TempDir();
+        var eicar = dir.Write("files/eicar.com", TestFiles.Eicar);
+        var host = new UScanHost(new AppPaths(Path.Combine(dir.Path, "data")), new GenericPlatformServices(),
+            new UScanSettings { ClamdPort = clamd.Port, HeuristicsEnabled = false });
+        host.Allow(Convert.ToHexStringLower(SHA256.HashData(TestFiles.Eicar)), eicar, "test");
+
+        var (report, _) = await host.ScanAsync(host.Plan(ScanMode.Custom, [Path.Combine(dir.Path, "files")]), null, Ct);
+
+        Assert.Equal(Verdict.Infected, Assert.Single(report.Files).Verdict);
+        var log = host.Log.ReadRecent(20);
+        Assert.DoesNotContain(log, e => e.Severity == EventSeverity.Threat);
+        Assert.Contains(log, e => e.Severity == EventSeverity.Info && e.Path == eicar && e.Message.Contains("allowed by user", StringComparison.Ordinal));
+        Assert.Empty(host.OpenDetections());
     }
 }

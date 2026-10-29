@@ -13,6 +13,10 @@
 
 Testdaten: ausschließlich harmlos. EICAR wird zur Laufzeit zusammengesetzt; ZIP-Bomben bestehen aus Nullbytes; „verdächtige“ PE-Dateien werden im Test synthetisch erzeugt und nie ausgeführt. **Keine echte Malware.**
 
+## Nachtrag Version 0.5.3
+
+Ursache der Abbrüche bei vollständigen Scans gefunden: UScan öffnet für jede Datei eine eigene Verbindung zu `clamd` und schloss sie selbst zuerst. Windows hält dann jeden lokalen Port einige Minuten im Zustand TIME_WAIT; bei vielen kleinen Dateien hintereinander waren alle Ports belegt („Normalerweise darf jede Socketadresse … nur jeweils einmal verwendet werden“, nach 235 197 von 236 224 Dateien). Jetzt wartet UScan nach der Antwort bis zu 2 s, bis `clamd` die Verbindung schließt, so dass TIME_WAIT auf der Seite von `clamd` liegt. Ist die Engine direkt nach einer Wiederherstellung erneut weg, wartet UScan noch einmal bis zu 2 min, statt den Scan sofort abzubrechen. Vom Nutzer als Fehlalarm zugelassene Funde (gleiche SHA-256) stehen weiter im Bericht, werden im Protokoll aber als Info statt als Bedrohung geführt und in der Scan-Ansicht nicht mehr für die Quarantäne vorausgewählt. Tests: Linux 187/187 (neu: 300 Scans gegen echtes `clamd` hinterlassen keine Client-Ports in TIME_WAIT – schlug vor der Änderung mit 36 fehl; kurzer zweiter Ausfall bricht nicht ab; zugelassener EICAR-Fund wird nicht als Bedrohung protokolliert; offen gehaltene Verbindung blockiert nicht).
+
 ## Nachtrag Version 0.5.2
 
 Die Abbruchmeldung nennt die Datei, bei der die Verbindung verloren ging. Wartezeit auf die Engine auf 24 × 5 s (2 min) verlängert, damit ein von Windows nach einem Absturz neu gestarteter `clamd`-Dienst (Wiederherstellungsoption, siehe docs/08) seine Signaturen laden kann. Offene Funde lassen sich in der Übersicht direkt in Quarantäne verschieben oder als Fehlalarm zulassen (vorher nur über die Kommandozeile). Tests: Linux 183/183 (3 neue in HostAllowTests), Windows zusätzlich 1 neuer Oberflächentest.
