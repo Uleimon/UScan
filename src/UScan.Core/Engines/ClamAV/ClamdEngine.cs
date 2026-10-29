@@ -18,6 +18,9 @@ public sealed class ClamdOptions
 
     public int ChunkSize { get; init; } = 64 * 1024;
 
+    /// <summary>How long to wait for clamd to close the connection after its reply, so that clamd closes first.</summary>
+    public TimeSpan CloseWaitTimeout { get; init; } = TimeSpan.FromSeconds(2);
+
     /// <summary>Must not exceed StreamMaxLength in clamd.conf. Larger files are skipped and labelled as such.</summary>
     public long MaxStreamBytes { get; init; } = 100L * 1024 * 1024;
 
@@ -157,6 +160,7 @@ public sealed class ClamdEngine : IScanEngine
                 return new EngineResult(Verdict.Error, Id, null, "clamd closed the connection during INSTREAM without a reply.");
             }
 
+            await AwaitDaemonCloseAsync(net, ct).ConfigureAwait(false);
             return ClamdResponseParser.ParseScanReply(reply);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -182,7 +186,9 @@ public sealed class ClamdEngine : IScanEngine
             using var client = await ConnectAsync(timeout.Token).ConfigureAwait(false);
             var net = client.GetStream();
             await net.WriteAsync(Encoding.ASCII.GetBytes($"z{command}\0"), timeout.Token).ConfigureAwait(false);
-            return (await ReadReplyAsync(net, timeout.Token).ConfigureAwait(false)).TrimEnd('\0', '\n');
+            var reply = (await ReadReplyAsync(net, timeout.Token).ConfigureAwait(false)).TrimEnd('\0', '\n');
+            await AwaitDaemonCloseAsync(net, timeout.Token).ConfigureAwait(false);
+            return reply;
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -213,6 +219,29 @@ public sealed class ClamdEngine : IScanEngine
         {
             client.Dispose();
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Waits briefly for clamd to close the connection after its reply. clamd closes after every
+    /// command outside a session; if UScan closed first instead, each scan would leave one of its
+    /// local ports in TIME_WAIT for minutes, and a full scan of a few hundred thousand files used up
+    /// all local ports on Windows ("Normalerweise darf jede Socketadresse ... nur jeweils einmal
+    /// verwendet werden"). The reply has already been read, so any failure here is ignored.
+    /// </summary>
+    private async Task AwaitDaemonCloseAsync(NetworkStream net, CancellationToken cancellationToken)
+    {
+        using var wait = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        wait.CancelAfter(_options.CloseWaitTimeout);
+        var buffer = new byte[256];
+        try
+        {
+            while (await net.ReadAsync(buffer, wait.Token).ConfigureAwait(false) > 0)
+            {
+            }
+        }
+        catch (Exception ex) when (ex is IOException or OperationCanceledException or SocketException)
+        {
         }
     }
 

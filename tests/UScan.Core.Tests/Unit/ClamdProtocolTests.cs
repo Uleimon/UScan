@@ -72,6 +72,37 @@ public class ClamdProtocolTests
     }
 
     [Fact]
+    public async Task Reply_counts_even_if_daemon_keeps_the_connection_open()
+    {
+        await using var server = FakeDaemon.Start(async s =>
+        {
+            await ReadCommand(s);
+            var len = new byte[4];
+            while (true)
+            {
+                await s.ReadExactlyAsync(len);
+                var n = BinaryPrimitives.ReadUInt32BigEndian(len);
+                if (n == 0)
+                {
+                    break;
+                }
+
+                await s.ReadExactlyAsync(new byte[n]);
+            }
+
+            await s.WriteAsync("stream: Eicar-Test-Signature FOUND\0"u8.ToArray());
+            await Task.Delay(Timeout.Infinite, s.Token);
+        });
+
+        var engine = new ClamdEngine(new ClamdOptions { Port = server.Port, CloseWaitTimeout = TimeSpan.FromMilliseconds(200) });
+        var started = DateTime.UtcNow;
+        var result = await engine.ScanAsync(new MemoryStream([1, 2, 3]), Ct);
+
+        Assert.Equal(Verdict.Infected, result.Verdict);
+        Assert.True(DateTime.UtcNow - started < TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
     public async Task Silent_daemon_times_out_as_error()
     {
         await using var server = FakeDaemon.Start(async s => await Task.Delay(Timeout.Infinite, s.Token));

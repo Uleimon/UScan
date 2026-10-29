@@ -5,15 +5,17 @@ using UScan.Core.Scanning;
 
 namespace UScan.Desktop.ViewModels;
 
-internal sealed class ScanResultRow(FileScanResult result) : ObservableObject
+internal sealed class ScanResultRow(FileScanResult result, bool allowedByUser = false) : ObservableObject
 {
-    private bool _selected = result.Verdict == Verdict.Infected;
+    private bool _selected = result.Verdict == Verdict.Infected && !allowedByUser;
     private string _action = "";
 
     public FileScanResult Result { get; } = result;
     public string Path => Result.Path;
     public string VerdictText => Texts.Verdict(Result.Verdict);
-    public string Detail => Result.Verdict == Verdict.Skipped ? $"übersprungen ({Result.SkipReason})" : Result.DetectionName ?? Result.Message ?? "";
+    public string Detail => Result.Verdict == Verdict.Skipped ? $"übersprungen ({Result.SkipReason})"
+        : (Result.DetectionName ?? Result.Message ?? "") + (AllowedByUser ? " – von dir als Fehlalarm zugelassen" : "");
+    public bool AllowedByUser { get; } = allowedByUser;
     public string Explanation => string.Join(Environment.NewLine, Result.EngineResults.Where(e => e.Verdict != Verdict.Clean && e.Detail is not null).Select(e => $"[{e.EngineId}] {e.Detail}"));
     public bool CanQuarantine => Result.Verdict is Verdict.Infected or Verdict.Suspicious;
     public bool Selected { get => _selected; set => Set(ref _selected, value); }
@@ -125,9 +127,10 @@ internal sealed class ScanViewModel : ObservableObject, IDisposable
             });
 
             var (report, file) = await Task.Run(() => _host.ScanAsync(plan, progress, _cts.Token));
+            var allowed = _host.AllowedHashes();
             foreach (var f in report.Files.Where(f => f.Verdict != Verdict.Clean).OrderBy(f => f.Verdict))
             {
-                Results.Add(new ScanResultRow(f));
+                Results.Add(new ScanResultRow(f, f.Sha256 is not null && allowed.Contains(f.Sha256)));
             }
 
             foreach (var i in report.Issues)

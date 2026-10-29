@@ -96,14 +96,26 @@ public sealed class UScanHost
         Log.Append(new SecurityEvent(_time.GetUtcNow(), EventSeverity.Info, "scan", $"{plan.Mode} scan started ({plan.Roots.Count} root(s))."));
         var report = await CreateRunner(plan.MaxDirectoryDepth, heuristics, secondOpinion).RunAsync(plan.Roots, progress, ct).ConfigureAwait(false);
         var file = Reports.Save(report);
+        var allowed = AllowedHashes();
+        var allowedHits = 0;
         foreach (var f in report.Files.Where(f => f.Verdict is Verdict.Infected or Verdict.Suspicious))
         {
+            if (f.Sha256 is not null && allowed.Contains(f.Sha256))
+            {
+                // Still recorded in the report; only the user's own decision changes how it is logged.
+                allowedHits++;
+                Log.Append(new SecurityEvent(_time.GetUtcNow(), EventSeverity.Info, "scan",
+                    $"{f.Verdict}: {f.DetectionName} (allowed by user as false positive, same SHA-256)", f.Path, f.Sha256));
+                continue;
+            }
+
             Log.Append(new SecurityEvent(_time.GetUtcNow(), f.Verdict == Verdict.Infected ? EventSeverity.Threat : EventSeverity.Warning,
                 "scan", $"{f.Verdict}: {f.DetectionName}", f.Path, f.Sha256));
         }
 
         Log.Append(new SecurityEvent(_time.GetUtcNow(), report.Outcome == ScanOutcome.Completed ? EventSeverity.Info : EventSeverity.Warning, "scan",
             $"{plan.Mode} scan {report.Outcome}: {report.Files.Count} of {report.FilesDiscovered} files, {report.CountOf(Verdict.Infected)} infected, {report.CountOf(Verdict.Suspicious)} suspicious." +
+            (allowedHits > 0 ? $" {allowedHits} of these allowed by user." : "") +
             (report.Outcome == ScanOutcome.Aborted && report.Issues.FirstOrDefault(i => i.Path == "(engine)") is { } reason ? $" Reason: {reason.Message}" : ""),
             null, file));
         return (report, file);
@@ -125,6 +137,9 @@ public sealed class UScanHost
             return [];
         }
     }
+
+    /// <summary>SHA-256 values the user has allowed as false positives.</summary>
+    public IReadOnlySet<string> AllowedHashes() => AllowList().Select(a => a.Sha256).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Marks a detection as a false positive by its exact SHA-256. A changed file is not covered.</summary>
     public void Allow(string sha256, string path, string reason)
@@ -174,7 +189,7 @@ public sealed class UScanHost
     /// </summary>
     public IReadOnlyList<OpenDetection> OpenDetections(int reportsToConsider = 30)
     {
-        var allowed = AllowList().Select(a => a.Sha256).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var allowed = AllowedHashes();
         var newest = new Dictionary<string, (FileScanResult Result, DateTimeOffset At)>(StringComparer.OrdinalIgnoreCase);
         foreach (var file in Reports.List().Take(reportsToConsider))
         {

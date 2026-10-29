@@ -20,10 +20,15 @@ internal sealed class FakeEngine : IScanEngine
     /// <summary>Content containing this marker always loses the connection (engine stays reachable).</summary>
     public string? AlwaysDropMarker { get; init; }
 
+    /// <summary>After each dropped scan, this many following reachability checks fail (a short outage).</summary>
+    public int OfflineChecksAfterDrop { get; init; }
+
+    private int _offlineChecks;
+
     public int Scans => _scans;
 
     public Task<EngineInfo> GetInfoAsync(CancellationToken cancellationToken) =>
-        Unavailable || Volatile.Read(ref _scans) > FailAfterScans
+        Unavailable || Volatile.Read(ref _scans) > FailAfterScans || Interlocked.Decrement(ref _offlineChecks) >= 0
             ? throw new EngineUnavailableException("fake engine offline")
             : Task.FromResult(new EngineInfo(Id, "1.0", 1, DateTimeOffset.UtcNow));
 
@@ -37,6 +42,7 @@ internal sealed class FakeEngine : IScanEngine
 
         if (DropScans.Contains(n))
         {
+            Volatile.Write(ref _offlineChecks, OfflineChecksAfterDrop);
             throw new EngineUnavailableException("fake connection reset");
         }
 

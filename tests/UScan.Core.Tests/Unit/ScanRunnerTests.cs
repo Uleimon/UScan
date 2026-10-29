@@ -177,6 +177,26 @@ public class ScanRunnerTests
     }
 
     [Fact]
+    public async Task Engine_that_is_briefly_gone_again_after_recovering_does_not_abort_the_scan()
+    {
+        using var dir = new TempDir();
+        for (var i = 0; i < 5; i++)
+        {
+            dir.Write($"f{i}.txt", "data");
+        }
+
+        // Scan 2 and its retry (scan 3) both fail, and each time the engine is unreachable for 3 checks.
+        var engine = new FakeEngine { DropScans = new HashSet<int> { 2, 3 }, OfflineChecksAfterDrop = 3 };
+        var report = await new ScanRunner(engine, new ScanOptions { MaxDegreeOfParallelism = 1, EngineRecoveryDelay = TimeSpan.Zero })
+            .RunAsync([dir.Path], cancellationToken: Ct);
+
+        Assert.Equal(ScanOutcome.Completed, report.Outcome);
+        Assert.Equal(5, report.Files.Count);
+        Assert.Equal(1, report.CountOf(Verdict.Error));
+        Assert.Equal(4, report.CountOf(Verdict.Clean));
+    }
+
+    [Fact]
     public async Task Unavailable_engine_aborts_before_scanning()
     {
         using var dir = new TempDir();
