@@ -15,6 +15,10 @@ und muss einmalig separat installiert werden:
    .\freshclam.exe
    .\clamd.exe --install-service
    Set-Service clamd -StartupType Automatic; Start-Service clamd
+   sc.exe failure clamd reset= 86400 actions= restart/5000/restart/5000/restart/5000
+
+   clamd muss immer laufen, solange UScan scannt. Als Dienst passiert das
+   automatisch; ein offenes clamd-Fenster darf nicht geschlossen werden.
 
 3. UScan starten. Die Übersicht zeigt, ob die Engine erreichbar ist und die
    Signaturen aktuell sind. Grün erscheint nur, wenn alles stimmt.

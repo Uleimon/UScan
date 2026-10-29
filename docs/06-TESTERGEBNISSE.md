@@ -13,6 +13,10 @@
 
 Testdaten: ausschließlich harmlos. EICAR wird zur Laufzeit zusammengesetzt; ZIP-Bomben bestehen aus Nullbytes; „verdächtige“ PE-Dateien werden im Test synthetisch erzeugt und nie ausgeführt. **Keine echte Malware.**
 
+## Nachtrag Version 0.5.2
+
+Die Abbruchmeldung nennt die Datei, bei der die Verbindung verloren ging. Wartezeit auf die Engine auf 24 × 5 s (2 min) verlängert, damit ein von Windows nach einem Absturz neu gestarteter `clamd`-Dienst (Wiederherstellungsoption, siehe docs/08) seine Signaturen laden kann. Offene Funde lassen sich in der Übersicht direkt in Quarantäne verschieben oder als Fehlalarm zulassen (vorher nur über die Kommandozeile). Tests: Linux 183/183 (3 neue in HostAllowTests), Windows zusätzlich 1 neuer Oberflächentest.
+
 ## Nachtrag Version 0.5.1
 
 Neu: Verbindungsverlust zu `clamd` bricht den Scan nicht mehr sofort ab. UScan prüft bis zu sechsmal im Abstand von 5 s, ob die Engine wieder antwortet, und scannt die betroffene Datei dann erneut; bricht `clamd` bei derselben Datei erneut ab, wird nur diese Datei als „Fehler“ gemeldet. Ist die Engine nach den Versuchen nicht erreichbar, wird der Scan wie bisher als abgebrochen gemeldet, jetzt mit dem Grund im Protokoll. Anlass: Ein vollständiger Scan auf einem echten Windows-PC brach nach 235 331 von 236 358 Dateien ab. Tests: Linux 180/180 (2 neue in ScanRunnerTests).

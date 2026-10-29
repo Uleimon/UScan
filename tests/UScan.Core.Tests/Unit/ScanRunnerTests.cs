@@ -134,7 +134,7 @@ public class ScanRunnerTests
             .RunAsync([dir.Path], cancellationToken: Ct);
 
         Assert.Equal(ScanOutcome.Aborted, report.Outcome);
-        Assert.Contains(report.Issues, i => i.Message.Contains("crashed", StringComparison.Ordinal) && i.Message.Contains("still unreachable after 6 attempts", StringComparison.Ordinal));
+        Assert.Contains(report.Issues, i => i.Message.Contains("crashed", StringComparison.Ordinal) && i.Message.Contains("still unreachable after 24 attempts", StringComparison.Ordinal) && i.Message.Contains(dir.Path, StringComparison.Ordinal));
         Assert.True(report.FilesNotProcessed > 0);
     }
 

@@ -54,7 +54,19 @@
                     <Border Style="{StaticResource Card}">
                         <StackPanel>
                             <TextBlock Text="Offene Funde" FontWeight="SemiBold" Margin="0,0,0,6"/>
-                            <ItemsControl ItemsSource="{Binding OpenDetections}"/>
+                            <ItemsControl ItemsSource="{Binding OpenDetections}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Margin="0,0,0,8">
+                                            <TextBlock Text="{Binding Text}" TextWrapping="Wrap"/>
+                                            <WrapPanel>
+                                                <Button Content="In Quarantäne" Command="{Binding DataContext.QuarantineDetectionCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"/>
+                                                <Button Content="Als Fehlalarm zulassen" Command="{Binding DataContext.AllowDetectionCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"/>
+                                            </WrapPanel>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
                             <TextBlock Style="{StaticResource Hint}" Text="Ein Fund gilt als offen, solange die Datei unverändert am Fundort liegt und weder in Quarantäne verschoben noch als Fehlalarm zugelassen wurde."/>
                         </StackPanel>
                     </Border>
