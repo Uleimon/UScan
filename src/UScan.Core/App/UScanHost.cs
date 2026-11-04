@@ -94,6 +94,7 @@ public sealed class UScanHost
     {
         ArgumentNullException.ThrowIfNull(plan);
         Log.Append(new SecurityEvent(_time.GetUtcNow(), EventSeverity.Info, "scan", $"{plan.Mode} scan started ({plan.Roots.Count} root(s))."));
+        using var background = Settings.LowPriorityScan ? Platform.EnterBackgroundMode() : null;
         var report = await CreateRunner(plan.MaxDirectoryDepth, heuristics, secondOpinion).RunAsync(plan.Roots, progress, ct).ConfigureAwait(false);
         var file = Reports.Save(report);
         var allowed = AllowedHashes();

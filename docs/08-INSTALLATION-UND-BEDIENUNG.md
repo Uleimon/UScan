@@ -120,6 +120,7 @@ Datei `%LOCALAPPDATA%\UScan\settings.json` (fehlt sie, gelten Standardwerte; `us
   "archiveMaxFiles": 10000,
   "maxSignatureAgeDays": 3,
   "parallelism": 0,
+  "lowPriorityScan": true,
   "heuristicsEnabled": true,
   "defenderSecondOpinion": true,
   "freshclamPath": "C:\\Program Files\\ClamAV\\freshclam.exe",
@@ -128,7 +129,7 @@ Datei `%LOCALAPPDATA%\UScan\settings.json` (fehlt sie, gelten Standardwerte; `us
 }
 ```
 
-`parallelism` ist die Zahl der gleichzeitig gescannten Dateien. `0` (Standard) heißt automatisch: die Hälfte der logischen Prozessoren, mindestens 2, höchstens 8. Ein fester Wert von 1 bis 16 überschreibt das; ein alter Eintrag `"parallelism": 2` bremst Scans auf schnellen PCs, also löschen oder auf `0` setzen. `MaxThreads` in `clamd.conf` (Standard 10) muss mindestens so groß sein.
+`parallelism` ist die Zahl der gleichzeitig gescannten Dateien. `0` (Standard) heißt automatisch: die Hälfte der logischen Prozessoren, mindestens 2, höchstens 8. `lowPriorityScan` (Standard `true`) lässt UScan während eines Scans mit niedriger CPU-, Festplatten- und Speicherpriorität laufen: Auf einem unbenutzten PC ist der Scan genauso schnell, andere Programme haben aber Vorrang. Mit `false` bekommt der Scan auch dann volle Leistung, der PC kann dabei aber stark ruckeln. Ein fester Wert von 1 bis 16 überschreibt das; ein alter Eintrag `"parallelism": 2` bremst Scans auf schnellen PCs, also löschen oder auf `0` setzen. `MaxThreads` in `clamd.conf` (Standard 10) muss mindestens so groß sein.
 
 Die Archivgrenzen **müssen** zu `clamd.conf` passen, sonst kann UScan stille Kürzungen nicht erkennen. Eine fehlerhafte Datei wird gemeldet und nicht überschrieben.
 

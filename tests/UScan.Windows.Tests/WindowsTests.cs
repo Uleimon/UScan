@@ -139,6 +139,26 @@ public sealed class HeuristicFalsePositiveTests
     }
 
     [Fact]
+    public void Background_mode_is_entered_once_and_left_when_the_last_scan_ends()
+    {
+        using (var first = BackgroundMode.Enter())
+        {
+            Assert.NotNull(first);
+            Assert.True(BackgroundMode.Active);
+            using (var second = BackgroundMode.Enter())
+            {
+                Assert.NotNull(second);
+            }
+
+            Assert.True(BackgroundMode.Active);
+        }
+
+        Assert.False(BackgroundMode.Active);
+        using var again = BackgroundMode.Enter();
+        Assert.NotNull(again);
+    }
+
+    [Fact]
     public void System32_executables_are_not_flagged()
     {
         var analyzer = new UScan.Core.Heuristics.PeAnalyzer(new AuthenticodeVerifier());

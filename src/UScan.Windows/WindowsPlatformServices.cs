@@ -29,6 +29,8 @@ public sealed class WindowsPlatformServices : IPlatformServices
 
     public IFileScanEngine? CreateSecondOpinion() => DefenderEngine.TryCreate();
 
+    public IDisposable? EnterBackgroundMode() => BackgroundMode.Enter();
+
     public string DefaultFreshclamPath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "ClamAV", "freshclam.exe");
 
