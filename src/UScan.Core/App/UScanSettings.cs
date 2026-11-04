@@ -24,10 +24,17 @@ public sealed record UScanSettings
 
     /// <summary>
     /// Automatic: half the logical processors (roughly the physical cores, since clamd's work is
-    /// CPU-bound), at least 2 and at most 8 so the PC stays usable during a scan.
+    /// CPU-bound), at least 2 and at most 8.
     /// </summary>
     [JsonIgnore]
     public int EffectiveParallelism => Parallelism > 0 ? Parallelism : Math.Clamp(Environment.ProcessorCount / 2, 2, 8);
+
+    /// <summary>
+    /// Scans run with low CPU, disk and memory priority (Windows). On an idle PC the scan still gets
+    /// all free resources; when the user does something else, that wins. With 8 scans at once and
+    /// normal priority, a full scan made a 16-thread PC unusable.
+    /// </summary>
+    public bool LowPriorityScan { get; init; } = true;
     public bool HeuristicsEnabled { get; init; } = true;
 
     /// <summary>Ask Microsoft Defender for a second opinion on detections (Windows only, local, no upload).</summary>

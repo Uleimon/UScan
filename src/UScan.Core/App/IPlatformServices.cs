@@ -22,6 +22,12 @@ public interface IPlatformServices
     OnAccessProtection QueryOnAccessProtection();
 
     string DefaultFreshclamPath { get; }
+
+    /// <summary>
+    /// Lowers this process's CPU, disk and memory priority until the result is disposed, so a scan
+    /// yields to whatever the user is doing. Returns null when the platform has no such mode.
+    /// </summary>
+    IDisposable? EnterBackgroundMode();
 }
 
 /// <summary>Non-Windows hosts (development, CI): scanning works, Windows-only features report "not available".</summary>
@@ -34,4 +40,5 @@ public sealed class GenericPlatformServices : IPlatformServices
     public IFileScanEngine? CreateSecondOpinion() => null;
     public OnAccessProtection QueryOnAccessProtection() => new(null, "On-access protection can only be queried on Windows.");
     public string DefaultFreshclamPath => "/usr/bin/freshclam";
+    public IDisposable? EnterBackgroundMode() => null;
 }

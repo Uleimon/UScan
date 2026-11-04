@@ -11,6 +11,7 @@ public class SettingsTests
         Assert.Equal(0, auto.Parallelism);
         Assert.Null(auto.Validate());
         Assert.InRange(auto.EffectiveParallelism, 2, 8);
+        Assert.True(auto.LowPriorityScan);
 
         var fixedValue = new UScanSettings { Parallelism = 12 };
         Assert.Equal(12, fixedValue.EffectiveParallelism);
