@@ -645,6 +645,7 @@ int ShowSettings()
     Console.WriteLine($"Datenordner:   {paths.Root}");
     Console.WriteLine($"Einstellungen: {paths.Settings}{(File.Exists(paths.Settings) ? "" : " (nicht vorhanden, Standardwerte)")}");
     Console.WriteLine(JsonSerializer.Serialize(settings, jsonOptions));
+    Console.WriteLine($"Parallele Scans: {settings.EffectiveParallelism}{(settings.Parallelism == 0 ? $" (automatisch, {Environment.ProcessorCount} logische Prozessoren)" : "")}");
     return ExitOk;
 }
 
@@ -742,6 +743,6 @@ static void PrintUsage() => Console.WriteLine("""
       uscan log [--count 50]
       uscan settings
 
-    Allgemein: --data <Ordner> (Datenordner), --host/--port (clamd), --parallel <n>, --yes (Rückfragen bestätigen)
+    Allgemein: --data <Ordner> (Datenordner), --host/--port (clamd), --parallel <n> (0 = automatisch), --yes (Rückfragen bestätigen)
     Exit-Codes: 0 ok, 1 Funde, 2 unvollständig/abgelehnt/abgebrochen, 3 Engine nicht erreichbar, 64 Aufruf falsch.
     """);

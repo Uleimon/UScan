@@ -19,7 +19,15 @@ public sealed record UScanSettings
     public int ArchiveMaxFiles { get; init; } = 10_000;
 
     public int MaxSignatureAgeDays { get; init; } = 3;
-    public int Parallelism { get; init; } = 2;
+    /// <summary>Files scanned at the same time. 0 = automatic (see <see cref="EffectiveParallelism"/>).</summary>
+    public int Parallelism { get; init; }
+
+    /// <summary>
+    /// Automatic: half the logical processors (roughly the physical cores, since clamd's work is
+    /// CPU-bound), at least 2 and at most 8 so the PC stays usable during a scan.
+    /// </summary>
+    [JsonIgnore]
+    public int EffectiveParallelism => Parallelism > 0 ? Parallelism : Math.Clamp(Environment.ProcessorCount / 2, 2, 8);
     public bool HeuristicsEnabled { get; init; } = true;
 
     /// <summary>Ask Microsoft Defender for a second opinion on detections (Windows only, local, no upload).</summary>
@@ -90,9 +98,9 @@ public sealed record UScanSettings
             return "maxSignatureAgeDays must be between 1 and 30.";
         }
 
-        if (Parallelism is < 1 or > 16)
+        if (Parallelism is < 0 or > 16)
         {
-            return "parallelism must be between 1 and 16.";
+            return "parallelism must be between 0 (automatic) and 16.";
         }
 
         return AutostartCheckMinutes is < 1 or > 1440 ? "autostartCheckMinutes must be between 1 and 1440." : null;

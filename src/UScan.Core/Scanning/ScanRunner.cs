@@ -100,7 +100,7 @@ public sealed class ScanRunner
 
         using var abort = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var outcome = ScanOutcome.Completed;
-        var channel = Channel.CreateBounded<string>(new BoundedChannelOptions(1024) { SingleWriter = true });
+        var channel = Channel.CreateBounded<string>(new BoundedChannelOptions(1024) { SingleWriter = false });
 
         var producer = Task.Run(() => Enumerate(fullRoots, channel.Writer, results, issues, counters, progress, abort.Token), CancellationToken.None);
 
@@ -162,71 +162,10 @@ public sealed class ScanRunner
     {
         try
         {
-            foreach (var root in roots)
-            {
-                FileSystemInfo info = Directory.Exists(root) ? new DirectoryInfo(root) : new FileInfo(root);
-                if (!info.Exists)
-                {
-                    issues.Add(new ScanIssue(root, "Path does not exist."));
-                    continue;
-                }
-
-                var stack = new Stack<(FileSystemInfo Item, int Depth)>();
-                stack.Push((info, 0));
-                while (stack.Count > 0)
-                {
-                    ct.ThrowIfCancellationRequested();
-                    var (item, depth) = stack.Pop();
-
-                    if (item.Attributes.HasFlag(FileAttributes.ReparsePoint))
-                    {
-                        counters.Discover();
-                        var skipped = Skipped(item.FullName, null, SkipReason.ReparsePointOrSymlink);
-                        results.Add(skipped);
-                        counters.Complete(skipped);
-                        continue;
-                    }
-
-                    if (item is DirectoryInfo dir)
-                    {
-                        if (depth >= _options.MaxDirectoryDepth)
-                        {
-                            issues.Add(new ScanIssue(dir.FullName, $"Directory depth limit ({_options.MaxDirectoryDepth}) reached; contents not scanned."));
-                            continue;
-                        }
-
-                        try
-                        {
-                            // Materialise before pushing so an access error is attributed to this directory only.
-                            var children = dir.EnumerateFileSystemInfos("*", new EnumerationOptions
-                            {
-                                RecurseSubdirectories = false,
-                                IgnoreInaccessible = false,
-                                AttributesToSkip = 0,
-                                ReturnSpecialDirectories = false,
-                            }).ToList();
-                            for (var i = children.Count - 1; i >= 0; i--)
-                            {
-                                stack.Push((children[i], depth + 1));
-                            }
-                        }
-                        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
-                        {
-                            issues.Add(new ScanIssue(dir.FullName, $"Directory could not be read: {ex.Message}"));
-                        }
-
-                        continue;
-                    }
-
-                    counters.Discover();
-                    await writer.WriteAsync(item.FullName, ct).ConfigureAwait(false);
-                    if (counters.Discovered % 256 == 0)
-                    {
-                        progress?.Report(counters.Snapshot(null));
-                    }
-                }
-            }
-
+            // One walker per root (a full scan has one root per drive), so that several disks are read
+            // at the same time instead of one after another. They share the bounded channel, which
+            // spreads the workers over the drives.
+            await Task.WhenAll(roots.Select(root => Task.Run(() => EnumerateRoot(root, writer, results, issues, counters, progress, ct), ct))).ConfigureAwait(false);
             counters.EnumerationComplete = true;
             writer.TryComplete();
         }
@@ -236,6 +175,78 @@ public sealed class ScanRunner
             if (ex is not OperationCanceledException)
             {
                 throw;
+            }
+        }
+    }
+
+    private async Task EnumerateRoot(
+        string root,
+        ChannelWriter<string> writer,
+        ConcurrentBag<FileScanResult> results,
+        ConcurrentBag<ScanIssue> issues,
+        Counters counters,
+        IProgress<ScanProgress>? progress,
+        CancellationToken ct)
+    {
+        FileSystemInfo info = Directory.Exists(root) ? new DirectoryInfo(root) : new FileInfo(root);
+        if (!info.Exists)
+        {
+            issues.Add(new ScanIssue(root, "Path does not exist."));
+            return;
+        }
+
+        var stack = new Stack<(FileSystemInfo Item, int Depth)>();
+        stack.Push((info, 0));
+        while (stack.Count > 0)
+        {
+            ct.ThrowIfCancellationRequested();
+            var (item, depth) = stack.Pop();
+
+            if (item.Attributes.HasFlag(FileAttributes.ReparsePoint))
+            {
+                counters.Discover();
+                var skipped = Skipped(item.FullName, null, SkipReason.ReparsePointOrSymlink);
+                results.Add(skipped);
+                counters.Complete(skipped);
+                continue;
+            }
+
+            if (item is DirectoryInfo dir)
+            {
+                if (depth >= _options.MaxDirectoryDepth)
+                {
+                    issues.Add(new ScanIssue(dir.FullName, $"Directory depth limit ({_options.MaxDirectoryDepth}) reached; contents not scanned."));
+                    continue;
+                }
+
+                try
+                {
+                    // Materialise before pushing so an access error is attributed to this directory only.
+                    var children = dir.EnumerateFileSystemInfos("*", new EnumerationOptions
+                    {
+                        RecurseSubdirectories = false,
+                        IgnoreInaccessible = false,
+                        AttributesToSkip = 0,
+                        ReturnSpecialDirectories = false,
+                    }).ToList();
+                    for (var i = children.Count - 1; i >= 0; i--)
+                    {
+                        stack.Push((children[i], depth + 1));
+                    }
+                }
+                catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+                {
+                    issues.Add(new ScanIssue(dir.FullName, $"Directory could not be read: {ex.Message}"));
+                }
+
+                continue;
+            }
+
+            counters.Discover();
+            await writer.WriteAsync(item.FullName, ct).ConfigureAwait(false);
+            if (counters.Discovered % 256 == 0)
+            {
+                progress?.Report(counters.Snapshot(null));
             }
         }
     }
