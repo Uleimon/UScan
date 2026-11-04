@@ -71,7 +71,7 @@ public sealed class UScanHost
     public ScanRunner CreateRunner(int? maxDepth = null, bool? heuristics = null, bool? secondOpinion = null) =>
         new(Engine, new ScanOptions
         {
-            MaxDegreeOfParallelism = Settings.Parallelism,
+            MaxDegreeOfParallelism = Settings.EffectiveParallelism,
             MaxDirectoryDepth = maxDepth ?? 64,
             ArchiveLimits = ArchiveLimits,
             Heuristics = heuristics ?? Settings.HeuristicsEnabled ? [new PeAnalyzer(Platform.Signatures, _time), new ScriptAnalyzer()] : [],

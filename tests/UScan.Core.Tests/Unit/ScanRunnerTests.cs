@@ -197,6 +197,45 @@ public class ScanRunnerTests
     }
 
     [Fact]
+    public async Task Several_roots_are_walked_at_the_same_time()
+    {
+        // Root a holds more files than the work queue; walked one after another, root b would only be
+        // reached after all of a. Walked together (one root per drive), b is scanned early.
+        using var dir = new TempDir();
+        for (var i = 0; i < 1500; i++)
+        {
+            dir.Write($"a/{i}.txt", "x");
+        }
+
+        for (var i = 0; i < 5; i++)
+        {
+            dir.Write($"b/{i}.txt", "x");
+        }
+
+        var order = new List<string>();
+        var options = new ScanOptions
+        {
+            MaxDegreeOfParallelism = 1,
+            OpenFile = p =>
+            {
+                lock (order)
+                {
+                    order.Add(p);
+                }
+
+                return File.OpenRead(p);
+            },
+        };
+        var report = await new ScanRunner(new FakeEngine(), options)
+            .RunAsync([Path.Combine(dir.Path, "a"), Path.Combine(dir.Path, "b")], cancellationToken: Ct);
+
+        Assert.Equal(ScanOutcome.Completed, report.Outcome);
+        Assert.Equal(1505, report.Files.Count);
+        var lastB = order.FindLastIndex(p => p.Contains($"{Path.DirectorySeparatorChar}b{Path.DirectorySeparatorChar}", StringComparison.Ordinal));
+        Assert.InRange(lastB, 0, 1400);
+    }
+
+    [Fact]
     public async Task Unavailable_engine_aborts_before_scanning()
     {
         using var dir = new TempDir();

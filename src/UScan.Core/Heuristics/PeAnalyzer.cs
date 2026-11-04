@@ -42,6 +42,9 @@ public sealed class PeAnalyzer : IHeuristicAnalyzer
 
     public const int MaxBytes = 64 * 1024 * 1024;
 
+    /// <summary>The largest weight any signature outcome adds (an invalid signature).</summary>
+    private const int MaxSignaturePenalty = 35;
+
     public bool CanAnalyze(string path, ReadOnlySpan<byte> header) => header.Length >= 2 && header[0] == (byte)'M' && header[1] == (byte)'Z';
 
     public HeuristicResult Analyze(string path, Stream content)
@@ -76,6 +79,13 @@ public sealed class PeAnalyzer : IHeuristicAnalyzer
 
         features.AddRange(Evaluate(facts, _time.GetUtcNow()));
 
+        // Checking the signature is the slow part on Windows (WinVerifyTrust, catalog lookup). Skip it
+        // when even the worst signature outcome could not make the file suspicious: same verdict, less work.
+        if (HeuristicScorer.Score(features).Score + MaxSignaturePenalty < HeuristicScorer.Threshold)
+        {
+            return HeuristicScorer.Score(features);
+        }
+
         var sig = _signatures.Verify(path);
         switch (sig.Status)
         {
@@ -84,7 +94,7 @@ public sealed class PeAnalyzer : IHeuristicAnalyzer
                 features.Add(new("sig.trusted", -50, $"Trusted digital signature{(sig.Signer is null ? "" : $" ({sig.Signer})")}."));
                 break;
             case SignatureStatus.Invalid:
-                features.Add(new("sig.invalid", 35, "Digital signature is invalid: the file was modified after signing."));
+                features.Add(new("sig.invalid", MaxSignaturePenalty, "Digital signature is invalid: the file was modified after signing."));
                 break;
             case SignatureStatus.NotSigned:
                 features.Add(new("sig.none", 10, "Not digitally signed."));

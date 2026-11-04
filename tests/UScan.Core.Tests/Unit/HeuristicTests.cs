@@ -96,6 +96,33 @@ public class PeAnalyzerTests
         Assert.False(Analyze(pe, sig: SignatureStatus.Valid).Suspicious);
     }
 
+    private sealed class CountingSig(SignatureStatus s) : ISignatureVerifier
+    {
+        public int Calls;
+
+        public SignatureInfo Verify(string path)
+        {
+            Calls++;
+            return new(s, null, null);
+        }
+    }
+
+    [Fact]
+    public void Signature_is_only_checked_when_it_can_change_the_verdict()
+    {
+        var ordinary = new PeBuilder().Section(".text", PeBuilder.Code).Section(".data", PeBuilder.Data)
+            .Imports("CreateFileW", "ReadFile", "CloseHandle").Build();
+        var worst = new CountingSig(SignatureStatus.Invalid);
+        Assert.False(new PeAnalyzer(worst).Analyze("C:\\x\\app.exe", new MemoryStream(ordinary)).Suspicious);
+        Assert.Equal(0, worst.Calls);
+
+        var injector = new PeBuilder().Section("UPX0", PeBuilder.Rwx, PeBuilder.RandomBytes(16 * 1024))
+            .Imports("VirtualAllocEx", "WriteProcessMemory", "CreateRemoteThread").Build();
+        var trusted = new CountingSig(SignatureStatus.Valid);
+        Assert.False(new PeAnalyzer(trusted).Analyze("C:\\x\\app.exe", new MemoryStream(injector)).Suspicious);
+        Assert.Equal(1, trusted.Calls);
+    }
+
     [Fact]
     public void Packing_alone_is_not_suspicious()
     {
