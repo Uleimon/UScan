@@ -36,6 +36,9 @@ internal sealed class ScanViewModel : ObservableObject, IDisposable
     private string _summary = "";
     private string _notes = "";
 
+    /// <summary>Wait up to about 2 minutes for clamd when a scan starts (it may still be loading). Tests turn it off.</summary>
+    internal bool WaitForEngine { get; init; } = true;
+
     public ScanViewModel(UScanHost host, IDialogs dialogs, Func<Task> onFinished)
     {
         _host = host;
@@ -126,7 +129,8 @@ internal sealed class ScanViewModel : ObservableObject, IDisposable
                     $", {p.FilesSkipped:N0} übersprungen, {p.Errors:N0} Fehler";
             });
 
-            var (report, file) = await Task.Run(() => _host.ScanAsync(plan, progress, _cts.Token));
+            ProgressText = WaitForEngine ? "Verbinde mit clamd … (falls clamd gerade startet, wartet UScan bis zu 2 Minuten)" : "Verbinde mit clamd …";
+            var (report, file) = await Task.Run(() => _host.ScanAsync(plan, progress, _cts.Token, waitForEngine: WaitForEngine));
             var allowed = _host.AllowedHashes();
             foreach (var f in report.Files.Where(f => f.Verdict != Verdict.Clean).OrderBy(f => f.Verdict))
             {

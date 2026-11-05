@@ -1,3 +1,4 @@
+using UScan.Core.Engines;
 using UScan.Core.Model;
 using UScan.Core.Scanning;
 using UScan.Core.Tests.Support;
@@ -233,6 +234,41 @@ public class ScanRunnerTests
         Assert.Equal(1505, report.Files.Count);
         var lastB = order.FindLastIndex(p => p.Contains($"{Path.DirectorySeparatorChar}b{Path.DirectorySeparatorChar}", StringComparison.Ordinal));
         Assert.InRange(lastB, 0, 1400);
+    }
+
+    [Fact]
+    public async Task Interactive_scan_waits_for_an_engine_that_is_still_starting()
+    {
+        using var dir = new TempDir();
+        dir.Write("a.txt", "x");
+        var engine = new StartingEngine(failingChecks: 3);
+        var report = await new ScanRunner(engine, new ScanOptions { WaitForEngineAtStart = true, EngineRecoveryDelay = TimeSpan.Zero })
+            .RunAsync([dir.Path], cancellationToken: Ct);
+
+        Assert.Equal(ScanOutcome.Completed, report.Outcome);
+        Assert.Single(report.Files);
+
+        var gone = await new ScanRunner(new FakeEngine { Unavailable = true }, new ScanOptions { WaitForEngineAtStart = true, EngineRecoveryDelay = TimeSpan.Zero })
+            .RunAsync([dir.Path], cancellationToken: Ct);
+        Assert.Equal(ScanOutcome.Aborted, gone.Outcome);
+        Assert.Contains(gone.Issues, i => i.Message.Contains("still unreachable after 24 attempts", StringComparison.Ordinal) && i.Message.Contains("scan started", StringComparison.Ordinal));
+    }
+
+    /// <summary>Unreachable for the first few checks, then a normal engine (like clamd loading its signatures).</summary>
+    private sealed class StartingEngine(int failingChecks) : IScanEngine
+    {
+        private readonly FakeEngine _inner = new();
+        private int _checks;
+
+        public string Id => _inner.Id;
+        public long MaxStreamBytes => _inner.MaxStreamBytes;
+
+        public Task<EngineInfo> GetInfoAsync(CancellationToken cancellationToken) =>
+            Interlocked.Increment(ref _checks) <= failingChecks
+                ? throw new EngineUnavailableException("still loading")
+                : _inner.GetInfoAsync(cancellationToken);
+
+        public Task<EngineResult> ScanAsync(Stream content, CancellationToken cancellationToken) => _inner.ScanAsync(content, cancellationToken);
     }
 
     [Fact]

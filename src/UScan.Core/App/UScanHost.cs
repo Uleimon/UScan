@@ -68,9 +68,10 @@ public sealed class UScanHost
     public ArchiveLimits ArchiveLimits => new(
         Settings.ArchiveMaxFileMb * 1024 * 1024, Settings.ArchiveMaxScanMb * 1024 * 1024, Settings.ArchiveMaxFiles, MaxCompressionRatio: 1000);
 
-    public ScanRunner CreateRunner(int? maxDepth = null, bool? heuristics = null, bool? secondOpinion = null) =>
+    public ScanRunner CreateRunner(int? maxDepth = null, bool? heuristics = null, bool? secondOpinion = null, bool waitForEngine = false) =>
         new(Engine, new ScanOptions
         {
+            WaitForEngineAtStart = waitForEngine,
             MaxDegreeOfParallelism = Settings.EffectiveParallelism,
             MaxDirectoryDepth = maxDepth ?? 64,
             ArchiveLimits = ArchiveLimits,
@@ -89,13 +90,17 @@ public sealed class UScanHost
         return new ScanPlanner().Create(mode, inventory, customPaths);
     }
 
-    /// <summary>Runs a plan, stores the report and writes detections to the event log.</summary>
-    public async Task<(ScanReport Report, string ReportFile)> ScanAsync(ScanPlan plan, IProgress<ScanProgress>? progress, CancellationToken ct, bool? heuristics = null, bool? secondOpinion = null)
+    /// <summary>
+    /// Runs a plan, stores the report and writes detections to the event log. With
+    /// <paramref name="waitForEngine"/> (interactive scans) an engine that is not reachable yet is
+    /// awaited for up to about 2 minutes instead of aborting at once.
+    /// </summary>
+    public async Task<(ScanReport Report, string ReportFile)> ScanAsync(ScanPlan plan, IProgress<ScanProgress>? progress, CancellationToken ct, bool? heuristics = null, bool? secondOpinion = null, bool waitForEngine = false)
     {
         ArgumentNullException.ThrowIfNull(plan);
         Log.Append(new SecurityEvent(_time.GetUtcNow(), EventSeverity.Info, "scan", $"{plan.Mode} scan started ({plan.Roots.Count} root(s))."));
         using var background = Settings.LowPriorityScan ? Platform.EnterBackgroundMode() : null;
-        var report = await CreateRunner(plan.MaxDirectoryDepth, heuristics, secondOpinion).RunAsync(plan.Roots, progress, ct).ConfigureAwait(false);
+        var report = await CreateRunner(plan.MaxDirectoryDepth, heuristics, secondOpinion, waitForEngine).RunAsync(plan.Roots, progress, ct).ConfigureAwait(false);
         var file = Reports.Save(report);
         var allowed = AllowedHashes();
         var allowedHits = 0;

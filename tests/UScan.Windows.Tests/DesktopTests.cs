@@ -110,7 +110,8 @@ public sealed class DesktopViewModelTests : IDisposable
         Directory.CreateDirectory(target);
         await File.WriteAllTextAsync(Path.Combine(target, "a.txt"), "hello", Encoding.UTF8, TestContext.Current.CancellationToken);
         var refreshed = 0;
-        using var vm = new ScanViewModel(Host(), new NoDialogs(), () => { refreshed++; return Task.CompletedTask; });
+        // Without the start-up wait; waiting for clamd is covered in ScanRunnerTests.
+        using var vm = new ScanViewModel(Host(), new NoDialogs(), () => { refreshed++; return Task.CompletedTask; }) { WaitForEngine = false };
 
         await vm.RunAsync(ScanMode.Custom, [target]);
 
