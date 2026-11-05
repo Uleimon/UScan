@@ -68,10 +68,11 @@ public sealed class UScanHost
     public ArchiveLimits ArchiveLimits => new(
         Settings.ArchiveMaxFileMb * 1024 * 1024, Settings.ArchiveMaxScanMb * 1024 * 1024, Settings.ArchiveMaxFiles, MaxCompressionRatio: 1000);
 
-    public ScanRunner CreateRunner(int? maxDepth = null, bool? heuristics = null, bool? secondOpinion = null, bool waitForEngine = false) =>
+    public ScanRunner CreateRunner(int? maxDepth = null, bool? heuristics = null, bool? secondOpinion = null, bool waitForEngine = false, ScanJournal? journal = null) =>
         new(Engine, new ScanOptions
         {
             WaitForEngineAtStart = waitForEngine,
+            Journal = journal,
             MaxDegreeOfParallelism = Settings.EffectiveParallelism,
             MaxDirectoryDepth = maxDepth ?? 64,
             ArchiveLimits = ArchiveLimits,
@@ -90,18 +91,111 @@ public sealed class UScanHost
         return new ScanPlanner().Create(mode, inventory, customPaths);
     }
 
+    /// <summary>Where a running scan records its progress, so it can be continued after an interruption.</summary>
+    public string InterruptedScanDirectory => Path.Combine(Paths.Root, "scan-in-progress");
+
+    private string ReportSavedMarker => Path.Combine(InterruptedScanDirectory, "report-saved");
+
+    /// <summary>A scan that was interrupted (PC shut down, UScan closed, cancelled, engine gone) and can be continued; null if none.</summary>
+    public InterruptedScan? InterruptedScan() => ScanJournal.Peek(InterruptedScanDirectory);
+
     /// <summary>
     /// Runs a plan, stores the report and writes detections to the event log. With
     /// <paramref name="waitForEngine"/> (interactive scans) an engine that is not reachable yet is
-    /// awaited for up to about 2 minutes instead of aborting at once.
+    /// awaited for up to about 2 minutes instead of aborting at once. With <paramref name="resumable"/>
+    /// every finished file is recorded, so an interrupted scan can be continued with
+    /// <see cref="ResumeInterruptedAsync"/>; an older interrupted scan is closed first with a partial report.
     /// </summary>
-    public async Task<(ScanReport Report, string ReportFile)> ScanAsync(ScanPlan plan, IProgress<ScanProgress>? progress, CancellationToken ct, bool? heuristics = null, bool? secondOpinion = null, bool waitForEngine = false)
+    public async Task<(ScanReport Report, string ReportFile)> ScanAsync(ScanPlan plan, IProgress<ScanProgress>? progress, CancellationToken ct,
+        bool? heuristics = null, bool? secondOpinion = null, bool waitForEngine = false, bool resumable = false)
     {
         ArgumentNullException.ThrowIfNull(plan);
+        ScanJournal? journal = null;
+        if (resumable)
+        {
+            DiscardInterrupted();
+            journal = ScanJournal.Start(InterruptedScanDirectory, new ScanJournalHeader(_time.GetUtcNow(), plan.Mode, plan.Roots, plan.MaxDirectoryDepth, plan.Notes));
+        }
+
         Log.Append(new SecurityEvent(_time.GetUtcNow(), EventSeverity.Info, "scan", $"{plan.Mode} scan started ({plan.Roots.Count} root(s))."));
-        using var background = Settings.LowPriorityScan ? Platform.EnterBackgroundMode() : null;
-        var report = await CreateRunner(plan.MaxDirectoryDepth, heuristics, secondOpinion, waitForEngine).RunAsync(plan.Roots, progress, ct).ConfigureAwait(false);
+        return await RunAndRecordAsync(plan, journal, progress, heuristics, secondOpinion, waitForEngine, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>Continues the interrupted scan: unchanged files already checked are taken over, the rest is scanned.</summary>
+    public async Task<(ScanReport Report, string ReportFile)> ResumeInterruptedAsync(IProgress<ScanProgress>? progress, CancellationToken ct, bool waitForEngine = false)
+    {
+        var journal = ScanJournal.Resume(InterruptedScanDirectory) ?? throw new InvalidOperationException("There is no interrupted scan to continue.");
+        File.Delete(ReportSavedMarker);
+        var h = journal.Header;
+        var plan = new ScanPlan(h.Mode, h.Roots, h.MaxDirectoryDepth, h.Notes);
+        Log.Append(new SecurityEvent(_time.GetUtcNow(), EventSeverity.Info, "scan",
+            $"{plan.Mode} scan resumed ({journal.PreviouslyDone} file(s) already checked since {h.StartedAt.ToLocalTime():g}; unchanged ones are not scanned again)."));
+        return await RunAndRecordAsync(plan, journal, progress, null, null, waitForEngine, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Gives up the interrupted scan. If it ended without a report (e.g. the PC was switched off),
+    /// a partial report with everything checked until then is saved first, so its detections are not lost.
+    /// </summary>
+    public string? DiscardInterrupted()
+    {
+        if (ScanJournal.Peek(InterruptedScanDirectory) is not { } interrupted)
+        {
+            return null;
+        }
+
+        string? file = null;
+        if (!File.Exists(ReportSavedMarker) && ScanJournal.Resume(InterruptedScanDirectory) is { } journal)
+        {
+            using (journal)
+            {
+                var h = journal.Header;
+                var files = journal.Results().OrderBy(r => r.Path, StringComparer.Ordinal).ToArray();
+                var report = new ScanReport(Guid.NewGuid(), h.StartedAt, interrupted.LastActivity, ScanOutcome.Aborted, h.Roots, null, files.Length, files,
+                    [new ScanIssue("(interrupted)", "The scan was interrupted (e.g. the PC was shut down) and not continued. Only the files listed here were checked.")]);
+                file = Reports.Save(report);
+                LogReport(h.Mode, report, file);
+            }
+        }
+
+        ScanJournal.Delete(InterruptedScanDirectory);
+        return file;
+    }
+
+    private async Task<(ScanReport Report, string ReportFile)> RunAndRecordAsync(ScanPlan plan, ScanJournal? journal, IProgress<ScanProgress>? progress,
+        bool? heuristics, bool? secondOpinion, bool waitForEngine, CancellationToken ct)
+    {
+        ScanReport report;
+        try
+        {
+            using var background = Settings.LowPriorityScan ? Platform.EnterBackgroundMode() : null;
+            report = await CreateRunner(plan.MaxDirectoryDepth, heuristics, secondOpinion, waitForEngine, journal).RunAsync(plan.Roots, progress, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            journal?.Dispose();
+        }
+
         var file = Reports.Save(report);
+        if (journal is not null)
+        {
+            if (report.Outcome == ScanOutcome.Completed)
+            {
+                journal.Complete();
+            }
+            else
+            {
+                // Kept for "continue"; this run's report is already saved, so discarding needs no partial report.
+                File.WriteAllText(ReportSavedMarker, file);
+            }
+        }
+
+        LogReport(plan.Mode, report, file);
+        return (report, file);
+    }
+
+    private void LogReport(ScanMode mode, ScanReport report, string file)
+    {
         var allowed = AllowedHashes();
         var allowedHits = 0;
         foreach (var f in report.Files.Where(f => f.Verdict is Verdict.Infected or Verdict.Suspicious))
@@ -120,11 +214,10 @@ public sealed class UScanHost
         }
 
         Log.Append(new SecurityEvent(_time.GetUtcNow(), report.Outcome == ScanOutcome.Completed ? EventSeverity.Info : EventSeverity.Warning, "scan",
-            $"{plan.Mode} scan {report.Outcome}: {report.Files.Count} of {report.FilesDiscovered} files, {report.CountOf(Verdict.Infected)} infected, {report.CountOf(Verdict.Suspicious)} suspicious." +
+            $"{mode} scan {report.Outcome}: {report.Files.Count} of {report.FilesDiscovered} files, {report.CountOf(Verdict.Infected)} infected, {report.CountOf(Verdict.Suspicious)} suspicious." +
             (allowedHits > 0 ? $" {allowedHits} of these allowed by user." : "") +
-            (report.Outcome == ScanOutcome.Aborted && report.Issues.FirstOrDefault(i => i.Path == "(engine)") is { } reason ? $" Reason: {reason.Message}" : ""),
+            (report.Outcome != ScanOutcome.Completed && report.Issues.FirstOrDefault(i => i.Path is "(engine)" or "(interrupted)") is { } reason ? $" Reason: {reason.Message}" : ""),
             null, file));
-        return (report, file);
     }
 
     public FreshclamUpdater CreateSignatureUpdater() =>

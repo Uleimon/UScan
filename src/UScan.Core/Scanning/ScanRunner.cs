@@ -42,6 +42,11 @@ public sealed class ScanOptions
     /// </summary>
     public bool WaitForEngineAtStart { get; init; }
 
+    /// <summary>
+    /// Records each finished file and takes over unchanged files from an interrupted run of the same scan.
+    /// </summary>
+    public ScanJournal? Journal { get; init; }
+
     /// <summary>Test seam for simulating I/O failures. Production code uses <see cref="OpenForScan"/>.</summary>
     internal Func<string, Stream>? OpenFile { get; init; }
 
@@ -130,7 +135,7 @@ public sealed class ScanRunner
                 new ParallelOptions { MaxDegreeOfParallelism = _options.MaxDegreeOfParallelism, CancellationToken = abort.Token },
                 async (path, ct) =>
                 {
-                    var r = await ScanFileAsync(path, ct).ConfigureAwait(false);
+                    var r = await ScanOrReuseAsync(path, ct).ConfigureAwait(false);
                     results.Add(r);
                     counters.Complete(r);
                     progress?.Report(counters.Snapshot(path));
@@ -268,6 +273,34 @@ public sealed class ScanRunner
                 progress?.Report(counters.Snapshot(null));
             }
         }
+    }
+
+    private async Task<FileScanResult> ScanOrReuseAsync(string path, CancellationToken ct)
+    {
+        if (_options.Journal is not { } journal)
+        {
+            return await ScanFileAsync(path, ct).ConfigureAwait(false);
+        }
+
+        // Taken before scanning, so a change during the scan makes the next run scan the file again.
+        DateTime lastWrite;
+        try
+        {
+            lastWrite = File.GetLastWriteTimeUtc(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return await ScanFileAsync(path, ct).ConfigureAwait(false);
+        }
+
+        if (journal.TryReuse(path, lastWrite) is { } previous)
+        {
+            return previous;
+        }
+
+        var result = await ScanFileAsync(path, ct).ConfigureAwait(false);
+        journal.Append(result, lastWrite);
+        return result;
     }
 
     private async Task<FileScanResult> ScanFileAsync(string path, CancellationToken ct)
