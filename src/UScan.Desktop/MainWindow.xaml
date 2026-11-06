@@ -94,6 +94,15 @@
                         <Button Content="Ordner scannen …" Command="{Binding FolderCommand}"/>
                         <Button Content="Abbrechen" Command="{Binding CancelCommand}" Style="{StaticResource DangerButton}"/>
                     </WrapPanel>
+                    <Border Visibility="{Binding HasInterrupted, Converter={StaticResource BoolToVis}}" BorderBrush="{DynamicResource ActionBrush}" BorderThickness="2" CornerRadius="4" Padding="10" Margin="0,8,0,0">
+                        <StackPanel>
+                            <TextBlock Text="{Binding InterruptedText}" TextWrapping="Wrap"/>
+                            <WrapPanel Margin="0,6,0,0">
+                                <Button Content="Scan fortsetzen" Command="{Binding ResumeCommand}"/>
+                                <Button Content="Verwerfen (Teilbericht speichern)" Command="{Binding DiscardCommand}"/>
+                            </WrapPanel>
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
                 <StackPanel Grid.Row="1" Margin="0,4,0,8">
                     <ProgressBar Height="10" Minimum="0" Maximum="100" Value="{Binding Progress, Mode=OneWay}"

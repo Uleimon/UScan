@@ -35,6 +35,8 @@ internal sealed class ScanViewModel : ObservableObject, IDisposable
     private string _progressText = "Bereit.";
     private string _summary = "";
     private string _notes = "";
+    private bool _hasInterrupted;
+    private string _interruptedText = "";
 
     /// <summary>Wait up to about 2 minutes for clamd when a scan starts (it may still be loading). Tests turn it off.</summary>
     internal bool WaitForEngine { get; init; } = true;
@@ -55,6 +57,9 @@ internal sealed class ScanViewModel : ObservableObject, IDisposable
             }
         }, () => !Running);
         CancelCommand = new RelayCommand(_ => _cts?.Cancel(), _ => Running);
+        ResumeCommand = new AsyncCommand(ResumeAsync, () => !Running && HasInterrupted);
+        DiscardCommand = new RelayCommand(_ => Discard(), _ => !Running && HasInterrupted);
+        RefreshInterrupted();
         QuarantineCommand = new AsyncCommand(QuarantineSelectedAsync, () => !Running && Results.Any(r => r.Selected && r.CanQuarantine));
     }
 
@@ -63,6 +68,10 @@ internal sealed class ScanViewModel : ObservableObject, IDisposable
     public AsyncCommand AutostartCommand { get; }
     public AsyncCommand FolderCommand { get; }
     public RelayCommand CancelCommand { get; }
+    public AsyncCommand ResumeCommand { get; }
+    public RelayCommand DiscardCommand { get; }
+    public bool HasInterrupted { get => _hasInterrupted; private set => Set(ref _hasInterrupted, value); }
+    public string InterruptedText { get => _interruptedText; private set => Set(ref _interruptedText, value); }
     public AsyncCommand QuarantineCommand { get; }
 
     public ObservableCollection<ScanResultRow> Results { get; } = [];
@@ -104,6 +113,57 @@ internal sealed class ScanViewModel : ObservableObject, IDisposable
 
     internal async Task RunAsync(ScanMode mode, IReadOnlyList<string>? paths)
     {
+        if (_host.InterruptedScan() is { } old && !_dialogs.Confirm("Unterbrochener Scan",
+                $"Ein {Texts.Mode(old.Header.Mode)} vom {old.Header.StartedAt.ToLocalTime():g} wurde unterbrochen ({old.FilesDone:N0} Dateien geprüft). " +
+                "Wenn Sie einen neuen Scan starten, kann er nicht mehr fortgesetzt werden; ein Teilbericht mit allen Funden bis dahin wird gespeichert.\n\nNeuen Scan trotzdem starten?"))
+        {
+            return;
+        }
+
+        await ExecuteAsync(async (progress, ct) =>
+        {
+            var plan = await Task.Run(() => _host.Plan(mode, paths), ct);
+            Notes = string.Join(Environment.NewLine, plan.Notes);
+            if (plan.Roots.Count == 0)
+            {
+                return null;
+            }
+
+            ProgressText = WaitForEngine ? "Verbinde mit clamd … (falls clamd gerade startet, wartet UScan bis zu 2 Minuten)" : "Verbinde mit clamd …";
+            return await Task.Run(() => _host.ScanAsync(plan, progress, ct, waitForEngine: WaitForEngine, resumable: true), ct);
+        });
+    }
+
+    /// <summary>Continues the interrupted scan; unchanged files that were already checked are not scanned again.</summary>
+    internal Task ResumeAsync() => ExecuteAsync(async (progress, ct) =>
+    {
+        ProgressText = $"Setze den unterbrochenen Scan fort … {(WaitForEngine ? "(falls clamd gerade startet, wartet UScan bis zu 2 Minuten)" : "")}";
+        return await Task.Run(() => _host.ResumeInterruptedAsync(progress, ct, WaitForEngine), ct);
+    });
+
+    private void Discard()
+    {
+        if (_dialogs.Confirm("Unterbrochenen Scan verwerfen", "Der unterbrochene Scan wird nicht fortgesetzt. Ein Teilbericht mit allen Funden bis dahin wird gespeichert. Fortfahren?"))
+        {
+            var file = _host.DiscardInterrupted();
+            Summary = file is null ? "Unterbrochener Scan verworfen." : $"Unterbrochener Scan verworfen. Teilbericht: {file}";
+            RefreshInterrupted();
+        }
+    }
+
+    /// <summary>Updates the "continue interrupted scan" offer.</summary>
+    internal void RefreshInterrupted()
+    {
+        var interrupted = _host.InterruptedScan();
+        HasInterrupted = interrupted is not null;
+        InterruptedText = interrupted is null ? "" :
+            $"Ein {Texts.Mode(interrupted.Header.Mode)} vom {interrupted.Header.StartedAt.ToLocalTime():g} wurde unterbrochen " +
+            $"(zuletzt aktiv {interrupted.LastActivity.ToLocalTime():g}). {interrupted.FilesDone:N0} Dateien sind schon geprüft, {interrupted.Detections} Fund(e) bis dahin. " +
+            "Beim Fortsetzen werden unveränderte, bereits geprüfte Dateien übersprungen.";
+    }
+
+    private async Task ExecuteAsync(Func<IProgress<ScanProgress>, CancellationToken, Task<(ScanReport Report, string ReportFile)?>> start)
+    {
         Running = true;
         Results.Clear();
         Summary = "";
@@ -112,14 +172,6 @@ internal sealed class ScanViewModel : ObservableObject, IDisposable
         _cts = new CancellationTokenSource();
         try
         {
-            var plan = await Task.Run(() => _host.Plan(mode, paths));
-            Notes = string.Join(Environment.NewLine, plan.Notes);
-            if (plan.Roots.Count == 0)
-            {
-                ProgressText = "Nichts zu scannen.";
-                return;
-            }
-
             var progress = new Progress<ScanProgress>(p =>
             {
                 ProgressKnown = p.Fraction is not null;
@@ -129,8 +181,14 @@ internal sealed class ScanViewModel : ObservableObject, IDisposable
                     $", {p.FilesSkipped:N0} übersprungen, {p.Errors:N0} Fehler";
             });
 
-            ProgressText = WaitForEngine ? "Verbinde mit clamd … (falls clamd gerade startet, wartet UScan bis zu 2 Minuten)" : "Verbinde mit clamd …";
-            var (report, file) = await Task.Run(() => _host.ScanAsync(plan, progress, _cts.Token, waitForEngine: WaitForEngine));
+            if (await start(progress, _cts.Token) is not { } finished)
+            {
+                ProgressText = "Nichts zu scannen.";
+                return;
+            }
+
+            var (report, file) = finished;
+
             var allowed = _host.AllowedHashes();
             foreach (var f in report.Files.Where(f => f.Verdict != Verdict.Clean).OrderBy(f => f.Verdict))
             {
@@ -145,8 +203,8 @@ internal sealed class ScanViewModel : ObservableObject, IDisposable
             var outcome = report.Outcome switch
             {
                 ScanOutcome.Completed => "Scan abgeschlossen",
-                ScanOutcome.Cancelled => "Scan abgebrochen – nicht alle Dateien wurden geprüft",
-                _ => "Scan wegen Engine-Fehler abgebrochen – nicht alle Dateien wurden geprüft",
+                ScanOutcome.Cancelled => "Scan abgebrochen – nicht alle Dateien wurden geprüft. Er kann später fortgesetzt werden",
+                _ => "Scan wegen Engine-Fehler abgebrochen – nicht alle Dateien wurden geprüft. Er kann fortgesetzt werden, sobald clamd wieder läuft",
             };
             Summary = $"{outcome} ({report.Duration.TotalSeconds:F0} s). {report.FilesDiscovered:N0} Dateien gefunden, {report.CountOf(Verdict.Clean):N0} ohne Befund, " +
                       $"{report.CountOf(Verdict.Infected)} infiziert, {report.CountOf(Verdict.Suspicious)} verdächtig, {report.CountOf(Verdict.Incomplete)} unvollständig, " +
@@ -159,6 +217,7 @@ internal sealed class ScanViewModel : ObservableObject, IDisposable
             Running = false;
             _cts.Dispose();
             _cts = null;
+            RefreshInterrupted();
             await _onFinished();
         }
     }

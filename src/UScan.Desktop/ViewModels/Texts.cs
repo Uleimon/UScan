@@ -36,4 +36,12 @@ internal static class Texts
         Core.Model.Verdict.Skipped => "Übersprungen",
         _ => "Fehler",
     };
+
+    public static string Mode(Core.Scanning.ScanMode m) => m switch
+    {
+        Core.Scanning.ScanMode.Quick => "Schnellscan",
+        Core.Scanning.ScanMode.Full => "vollständiger Scan",
+        Core.Scanning.ScanMode.Autostart => "Autostart-Scan",
+        _ => "Ordner-Scan",
+    };
 }

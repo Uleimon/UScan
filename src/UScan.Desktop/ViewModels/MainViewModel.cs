@@ -15,7 +15,8 @@ internal sealed class MainViewModel : ObservableObject
         Inventory = new InventoryViewModel(host);
         Monitor = new MonitorViewModel(host, () => Dashboard.RefreshAsync());
         Log = new LogViewModel(host);
-        _page = Dashboard;
+        // An interrupted scan is offered for continuing right away.
+        _page = Scan.HasInterrupted ? Scan : Dashboard;
         NavigateCommand = new RelayCommand(p =>
         {
             Page = p switch

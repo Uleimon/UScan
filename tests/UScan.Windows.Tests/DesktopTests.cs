@@ -122,6 +122,26 @@ public sealed class DesktopViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task Interrupted_scan_is_offered_for_continuing_and_can_be_discarded()
+    {
+        var target = Path.Combine(_dir, "t2");
+        Directory.CreateDirectory(target);
+        await File.WriteAllTextAsync(Path.Combine(target, "a.txt"), "hello", Encoding.UTF8, TestContext.Current.CancellationToken);
+        var host = Host();
+        using var vm = new ScanViewModel(host, new YesDialogs(), () => Task.CompletedTask) { WaitForEngine = false };
+        Assert.False(vm.HasInterrupted);
+
+        await vm.RunAsync(ScanMode.Custom, [target]); // engine unreachable: the scan stops and can be continued
+
+        Assert.True(vm.HasInterrupted);
+        Assert.Contains("unterbrochen", vm.InterruptedText, StringComparison.Ordinal);
+
+        vm.DiscardCommand.Execute(null);
+        Assert.False(vm.HasInterrupted);
+        Assert.Null(host.InterruptedScan());
+    }
+
+    [Fact]
     public void On_access_query_returns_an_explained_state()
     {
         var r = new WindowsPlatformServices().QueryOnAccessProtection();
