@@ -47,6 +47,9 @@ public sealed class ScanOptions
     /// </summary>
     public ScanJournal? Journal { get; init; }
 
+    /// <summary>While paused, no new file is sent to the engine.</summary>
+    public ScanPauseGate? Pause { get; init; }
+
     /// <summary>Test seam for simulating I/O failures. Production code uses <see cref="OpenForScan"/>.</summary>
     internal Func<string, Stream>? OpenFile { get; init; }
 
@@ -135,6 +138,11 @@ public sealed class ScanRunner
                 new ParallelOptions { MaxDegreeOfParallelism = _options.MaxDegreeOfParallelism, CancellationToken = abort.Token },
                 async (path, ct) =>
                 {
+                    if (_options.Pause is { } pause)
+                    {
+                        await pause.WaitAsync(ct).ConfigureAwait(false);
+                    }
+
                     var r = await ScanOrReuseAsync(path, ct).ConfigureAwait(false);
                     results.Add(r);
                     counters.Complete(r);

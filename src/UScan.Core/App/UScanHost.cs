@@ -68,11 +68,12 @@ public sealed class UScanHost
     public ArchiveLimits ArchiveLimits => new(
         Settings.ArchiveMaxFileMb * 1024 * 1024, Settings.ArchiveMaxScanMb * 1024 * 1024, Settings.ArchiveMaxFiles, MaxCompressionRatio: 1000);
 
-    public ScanRunner CreateRunner(int? maxDepth = null, bool? heuristics = null, bool? secondOpinion = null, bool waitForEngine = false, ScanJournal? journal = null) =>
+    public ScanRunner CreateRunner(int? maxDepth = null, bool? heuristics = null, bool? secondOpinion = null, bool waitForEngine = false, ScanJournal? journal = null, ScanPauseGate? pause = null) =>
         new(Engine, new ScanOptions
         {
             WaitForEngineAtStart = waitForEngine,
             Journal = journal,
+            Pause = pause,
             MaxDegreeOfParallelism = Settings.EffectiveParallelism,
             MaxDirectoryDepth = maxDepth ?? 64,
             ArchiveLimits = ArchiveLimits,
@@ -162,6 +163,9 @@ public sealed class UScanHost
         return file;
     }
 
+    /// <summary>Pauses and resumes the scans started with <see cref="ScanAsync"/> and <see cref="ResumeInterruptedAsync"/>.</summary>
+    public ScanPauseGate ScanPause { get; } = new();
+
     private async Task<(ScanReport Report, string ReportFile)> RunAndRecordAsync(ScanPlan plan, ScanJournal? journal, IProgress<ScanProgress>? progress,
         bool? heuristics, bool? secondOpinion, bool waitForEngine, CancellationToken ct)
     {
@@ -169,10 +173,12 @@ public sealed class UScanHost
         try
         {
             using var background = Settings.LowPriorityScan ? Platform.EnterBackgroundMode() : null;
-            report = await CreateRunner(plan.MaxDirectoryDepth, heuristics, secondOpinion, waitForEngine, journal).RunAsync(plan.Roots, progress, ct).ConfigureAwait(false);
+            ScanPause.Resume();
+            report = await CreateRunner(plan.MaxDirectoryDepth, heuristics, secondOpinion, waitForEngine, journal, ScanPause).RunAsync(plan.Roots, progress, ct).ConfigureAwait(false);
         }
         finally
         {
+            ScanPause.Resume();
             journal?.Dispose();
         }
 
