@@ -36,6 +36,12 @@ public sealed class ScanOptions
 
     public TimeSpan EngineRecoveryDelay { get; init; } = TimeSpan.FromSeconds(5);
 
+    /// <summary>
+    /// If the engine is not reachable when the scan starts, wait for it like after a lost connection
+    /// (e.g. the clamd service is still loading its signatures right after boot) instead of aborting at once.
+    /// </summary>
+    public bool WaitForEngineAtStart { get; init; }
+
     /// <summary>Test seam for simulating I/O failures. Production code uses <see cref="OpenForScan"/>.</summary>
     internal Func<string, Stream>? OpenFile { get; init; }
 
@@ -92,10 +98,23 @@ public sealed class ScanRunner
         {
             engineInfo = await _engine.GetInfoAsync(cancellationToken).ConfigureAwait(false);
         }
-        catch (EngineUnavailableException ex)
+        catch (EngineUnavailableException ex) when (!_options.WaitForEngineAtStart)
         {
             issues.Add(new ScanIssue("(engine)", ex.Message));
             return Finish(ScanOutcome.Aborted, null);
+        }
+        catch (EngineUnavailableException first)
+        {
+            try
+            {
+                await WaitForEngineAsync(first, null, cancellationToken).ConfigureAwait(false);
+                engineInfo = await _engine.GetInfoAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (EngineUnavailableException ex)
+            {
+                issues.Add(new ScanIssue("(engine)", ex.Message));
+                return Finish(ScanOutcome.Aborted, null);
+            }
         }
 
         using var abort = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -369,7 +388,7 @@ public sealed class ScanRunner
         return (result, hashing.BytesRead, sha);
     }
 
-    private async Task WaitForEngineAsync(EngineUnavailableException cause, string path, CancellationToken ct)
+    private async Task WaitForEngineAsync(EngineUnavailableException cause, string? path, CancellationToken ct)
     {
         for (var i = 0; i < _options.EngineRecoveryAttempts; i++)
         {
@@ -381,7 +400,7 @@ public sealed class ScanRunner
         }
 
         throw new EngineUnavailableException(
-            $"{cause.Message} (still unreachable after {_options.EngineRecoveryAttempts} attempts, {_options.EngineRecoveryDelay.TotalSeconds:F0} s apart; file being scanned when the connection was lost: {path})", cause);
+            $"{cause.Message} (still unreachable after {_options.EngineRecoveryAttempts} attempts, {_options.EngineRecoveryDelay.TotalSeconds:F0} s apart; {(path is null ? "not reachable when the scan started" : $"file being scanned when the connection was lost: {path}")})", cause);
     }
 
     private async Task<bool> IsReachableAsync(CancellationToken ct)

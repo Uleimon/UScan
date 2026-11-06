@@ -13,6 +13,10 @@
 
 Testdaten: ausschließlich harmlos. EICAR wird zur Laufzeit zusammengesetzt; ZIP-Bomben bestehen aus Nullbytes; „verdächtige“ PE-Dateien werden im Test synthetisch erzeugt und nie ausgeführt. **Keine echte Malware.**
 
+## Nachtrag Version 0.5.6
+
+Ein Scan auf dem echten PC brach nach 2 s mit „clamd is not reachable … Verbindung verweigert“ ab, weil der clamd-Dienst nicht lief. Scans aus der Oberfläche warten jetzt beim Start wie nach einem Verbindungsverlust bis zu 24 × 5 s (2 min) auf clamd, z. B. wenn der Dienst nach dem Hochfahren noch die Signaturen lädt; erst danach wird abgebrochen, mit dem Hinweis „not reachable when the scan started“. Kommandozeile und Dateiüberwachung melden eine fehlende Engine weiterhin sofort (Exit-Code 3 bzw. Datei bleibt in der Warteschlange). Tests: Linux 191/191 (neu: Engine, die erst nach 3 Prüfungen antwortet; Engine, die nie kommt).
+
 ## Nachtrag Version 0.5.5
 
 Rückmeldung zu 0.5.4 von einem echten PC (Ryzen 7 7800X3D, 16 Threads, Windows auf einer SATA-SSD): Der vollständige Scan lief mit etwa 55 statt 26 Dateien/s, machte den PC aber so langsam, dass sich der Task-Manager nicht mehr öffnen ließ. Die genaue Ursache ist nicht gemessen (Kandidaten: 8 gleichzeitige clamd-Scans, Defender prüft jede geöffnete Datei mit, clamds temporäre Dateien auf der Systemplatte). Änderung (Parallelität bleibt auf Wunsch des Nutzers bei bis zu 8): Neu `lowPriorityScan` (Standard an): Während eines Scans läuft UScan unter Windows im Hintergrundmodus (`SetPriorityClass` mit `PROCESS_MODE_BACKGROUND_BEGIN`: niedrige CPU-, E/A- und Speicherpriorität). Da clamd nur scannt, was UScan liest und schickt, gibt das auch clamds Arbeit nach, sobald andere Programme Leistung brauchen; auf einem unbenutzten PC bleibt das Tempo gleich (nicht gemessen). Tests: Linux 190/190, Windows zusätzlich Hintergrundmodus ein/aus mit Referenzzählung. Ob der PC damit benutzbar bleibt, muss der nächste Scan auf dem echten PC zeigen.
