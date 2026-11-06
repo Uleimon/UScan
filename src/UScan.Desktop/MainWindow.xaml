@@ -92,6 +92,7 @@
                         <Button Content="Vollständiger Scan" Command="{Binding FullCommand}" ToolTip="Alle festen Laufwerke"/>
                         <Button Content="Autostart-Scan" Command="{Binding AutostartCommand}" ToolTip="Nur Programme aus Autostart, Diensten und geplanten Aufgaben"/>
                         <Button Content="Ordner scannen …" Command="{Binding FolderCommand}"/>
+                        <Button Content="{Binding PauseLabel}" Command="{Binding PauseCommand}"/>
                         <Button Content="Abbrechen" Command="{Binding CancelCommand}" Style="{StaticResource DangerButton}"/>
                     </WrapPanel>
                     <Border Visibility="{Binding HasInterrupted, Converter={StaticResource BoolToVis}}" BorderBrush="{DynamicResource ActionBrush}" BorderThickness="2" CornerRadius="4" Padding="10" Margin="0,8,0,0">

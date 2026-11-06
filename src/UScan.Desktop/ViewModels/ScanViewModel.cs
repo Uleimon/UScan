@@ -37,6 +37,8 @@ internal sealed class ScanViewModel : ObservableObject, IDisposable
     private string _notes = "";
     private bool _hasInterrupted;
     private string _interruptedText = "";
+    private bool _paused;
+    private string _lastProgressText = "";
 
     /// <summary>Wait up to about 2 minutes for clamd when a scan starts (it may still be loading). Tests turn it off.</summary>
     internal bool WaitForEngine { get; init; } = true;
@@ -57,6 +59,7 @@ internal sealed class ScanViewModel : ObservableObject, IDisposable
             }
         }, () => !Running);
         CancelCommand = new RelayCommand(_ => _cts?.Cancel(), _ => Running);
+        PauseCommand = new RelayCommand(_ => TogglePause(), _ => Running);
         ResumeCommand = new AsyncCommand(ResumeAsync, () => !Running && HasInterrupted);
         DiscardCommand = new RelayCommand(_ => Discard(), _ => !Running && HasInterrupted);
         RefreshInterrupted();
@@ -68,6 +71,21 @@ internal sealed class ScanViewModel : ObservableObject, IDisposable
     public AsyncCommand AutostartCommand { get; }
     public AsyncCommand FolderCommand { get; }
     public RelayCommand CancelCommand { get; }
+
+    /// <summary>Pauses the running scan, or continues it when it is paused.</summary>
+    public RelayCommand PauseCommand { get; }
+    public bool Paused
+    {
+        get => _paused;
+        private set
+        {
+            if (Set(ref _paused, value))
+            {
+                OnPropertyChanged(nameof(PauseLabel));
+            }
+        }
+    }
+    public string PauseLabel => Paused ? "Weiter" : "Pausieren";
     public AsyncCommand ResumeCommand { get; }
     public RelayCommand DiscardCommand { get; }
     public bool HasInterrupted { get => _hasInterrupted; private set => Set(ref _hasInterrupted, value); }
@@ -176,9 +194,10 @@ internal sealed class ScanViewModel : ObservableObject, IDisposable
             {
                 ProgressKnown = p.Fraction is not null;
                 Progress = (p.Fraction ?? 0) * 100;
-                ProgressText = $"{p.FilesCompleted:N0} von {p.FilesDiscovered:N0} Dateien" +
+                _lastProgressText = $"{p.FilesCompleted:N0} von {p.FilesDiscovered:N0} Dateien" +
                     (p.Fraction is { } f ? $" ({f:P0})" : " – Gesamtzahl wird noch ermittelt") +
                     $", {p.FilesSkipped:N0} übersprungen, {p.Errors:N0} Fehler";
+                ProgressText = Paused ? PausedText() : _lastProgressText;
             });
 
             if (await start(progress, _cts.Token) is not { } finished)
@@ -215,12 +234,39 @@ internal sealed class ScanViewModel : ObservableObject, IDisposable
         finally
         {
             Running = false;
+            Paused = false;
+            _lastProgressText = "";
             _cts.Dispose();
             _cts = null;
             RefreshInterrupted();
             await _onFinished();
         }
     }
+
+    internal void TogglePause()
+    {
+        if (!Running)
+        {
+            return;
+        }
+
+        if (Paused)
+        {
+            _host.ScanPause.Resume();
+            Paused = false;
+            ProgressText = _lastProgressText.Length > 0 ? _lastProgressText : "Scan läuft weiter …";
+        }
+        else
+        {
+            _host.ScanPause.Pause();
+            Paused = true;
+            ProgressText = PausedText();
+        }
+    }
+
+    private string PausedText() =>
+        $"Pausiert{(_lastProgressText.Length > 0 ? $" bei {_lastProgressText}" : "")}. Dateien, die gerade geprüft werden, laufen noch zu Ende. " +
+        "„Weiter“ setzt den Scan fort; auch nach dem Schließen von UScan oder einem Neustart kann er später fortgesetzt werden.";
 
     private async Task QuarantineSelectedAsync()
     {

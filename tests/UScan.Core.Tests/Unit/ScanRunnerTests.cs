@@ -237,6 +237,47 @@ public class ScanRunnerTests
     }
 
     [Fact]
+    public async Task Paused_scan_sends_no_files_until_it_is_resumed()
+    {
+        using var dir = new TempDir();
+        for (var i = 0; i < 20; i++)
+        {
+            dir.Write($"{i}.txt", "x");
+        }
+
+        var engine = new FakeEngine();
+        var pause = new ScanPauseGate();
+        pause.Pause();
+        var run = new ScanRunner(engine, new ScanOptions { MaxDegreeOfParallelism = 4, Pause = pause }).RunAsync([dir.Path], cancellationToken: Ct);
+
+        await Task.Delay(300, Ct);
+        Assert.Equal(0, engine.Scans);
+        Assert.False(run.IsCompleted);
+
+        pause.Resume();
+        var report = await run;
+        Assert.Equal(ScanOutcome.Completed, report.Outcome);
+        Assert.Equal(20, engine.Scans);
+    }
+
+    [Fact]
+    public async Task Paused_scan_can_still_be_cancelled()
+    {
+        using var dir = new TempDir();
+        dir.Write("a.txt", "x");
+        var pause = new ScanPauseGate();
+        pause.Pause();
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(Ct);
+        var run = new ScanRunner(new FakeEngine(), new ScanOptions { Pause = pause }).RunAsync([dir.Path], cancellationToken: cts.Token);
+
+        await Task.Delay(100, Ct);
+        await cts.CancelAsync();
+        var report = await run;
+        Assert.Equal(ScanOutcome.Cancelled, report.Outcome);
+        Assert.Empty(report.Files);
+    }
+
+    [Fact]
     public async Task Interactive_scan_waits_for_an_engine_that_is_still_starting()
     {
         using var dir = new TempDir();
