@@ -67,7 +67,14 @@ jobs:
       - name: Veröffentlichte Kommandozeile findet EICAR mit echtem clamd
         shell: pwsh
         run: |
-          choco install clamav -y --no-progress
+          # The ClamAV download from GitHub sometimes takes longer than Chocolatey's default 30 s.
+          choco config set --name webRequestTimeoutSeconds --value 300
+          foreach ($try in 1..3) {
+            choco install clamav -y --no-progress
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($try -eq 3) { exit 1 }
+            Start-Sleep -Seconds 20
+          }
           $clamd = Get-Item "C:\ProgramData\chocolatey\lib\clamav\tools\clamav-*\clamd.exe" | Select-Object -First 1
           $work = Join-Path $env:RUNNER_TEMP "uscan-pkg-test"
           New-Item -ItemType Directory -Force -Path "$work\db", "$work\data", "$work\files" | Out-Null

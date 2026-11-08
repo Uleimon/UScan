@@ -48,6 +48,32 @@ public sealed class DesktopViewModelTests : IDisposable
         return port;
     }
 
+    [Theory]
+    [InlineData(Verdict.Infected, false, "Serious", "DangerBrush")]
+    [InlineData(Verdict.Suspicious, false, "Minor", "MinorBrush")]
+    [InlineData(Verdict.Infected, true, "FalseAlarm", "InfoBrush")]
+    [InlineData(Verdict.Suspicious, true, "FalseAlarm", "InfoBrush")]
+    [InlineData(Verdict.Clean, false, "Ok", "OkBrush")]
+    [InlineData(Verdict.Error, false, "Unchecked", "NeutralBrush")]
+    [InlineData(Verdict.Skipped, true, "Unchecked", "NeutralBrush")]
+    public void Findings_are_coloured_by_how_serious_they_are(Verdict verdict, bool allowed, string expected, string brush)
+    {
+        var row = new ScanResultRow(new FileScanResult("C:\\x.exe", null, null, verdict, SkipReason.None, [], null, TimeSpan.Zero), allowed);
+        Assert.Equal(expected, row.Category.ToString());
+        Assert.Equal(brush, row.CategoryBrushKey);
+    }
+
+    [Fact]
+    public void Log_lines_are_coloured_and_only_findings_are_red()
+    {
+        var now = DateTimeOffset.Now;
+        Assert.Equal(FindingCategory.Serious, new LogRow(new SecurityEvent(now, EventSeverity.Threat, "scan", "Infected: Win.Test")).Color);
+        Assert.Equal(FindingCategory.Minor, new LogRow(new SecurityEvent(now, EventSeverity.Warning, "scan", "Suspicious: UScan.Heuristic.Score65")).Color);
+        Assert.Equal(FindingCategory.FalseAlarm, new LogRow(new SecurityEvent(now, EventSeverity.Info, "scan", "Infected: Win.Test (allowed by user as false positive, same SHA-256)")).Color);
+        Assert.Equal(FindingCategory.FalseAlarm, new LogRow(new SecurityEvent(now, EventSeverity.Warning, "allowlist", "User marked detection as allowed")).Color);
+        Assert.Equal(FindingCategory.Ok, new LogRow(new SecurityEvent(now, EventSeverity.Info, "scan", "Full scan started (5 root(s)).")).Color);
+    }
+
     [Fact]
     public async Task Dashboard_without_engine_is_not_green()
     {

@@ -9,6 +9,10 @@ internal sealed class OpenDetectionRow(OpenDetection detection)
 {
     public OpenDetection Detection { get; } = detection;
     public string Text => $"{Texts.Verdict(Detection.Verdict)}: {Detection.Path} ({Detection.DetectionName})";
+    public FindingCategory Category => Texts.Category(Detection.Verdict, allowedByUser: false);
+    public string CategoryLabel => Texts.CategoryLabel(Category);
+    public string CategoryBrushKey => Texts.CategoryBrushKey(Category);
+    public string CategoryTextBrushKey => Texts.CategoryTextBrushKey(Category);
 }
 
 /// <summary>Overview page. Every value comes from <see cref="UScanHost.GetStatusAsync"/>; nothing is assumed.</summary>
@@ -25,6 +29,7 @@ internal sealed class DashboardViewModel : ObservableObject
     private string _quarantine = "";
     private string _lastScan = "";
     private string _updateMessage = "";
+    private string _openSummary = "";
     private DateTimeOffset? _checkedAt;
 
     public DashboardViewModel(UScanHost host, Func<bool> scanRunning, IDialogs? dialogs = null)
@@ -67,6 +72,7 @@ internal sealed class DashboardViewModel : ObservableObject
     public string Quarantine { get => _quarantine; private set => Set(ref _quarantine, value); }
     public string LastScan { get => _lastScan; private set => Set(ref _lastScan, value); }
     public string UpdateMessage { get => _updateMessage; private set => Set(ref _updateMessage, value); }
+    public string OpenSummary { get => _openSummary; private set => Set(ref _openSummary, value); }
     public string CheckedAt => _checkedAt is { } t ? $"Stand: {t.ToLocalTime():HH:mm:ss}" : "";
 
     public async Task RefreshAsync()
@@ -85,10 +91,14 @@ internal sealed class DashboardViewModel : ObservableObject
         }
 
         OpenDetections.Clear();
-        foreach (var d in s.OpenDetections)
+        foreach (var row in s.OpenDetections.Select(d => new OpenDetectionRow(d)).OrderBy(r => r.Category).ThenBy(r => r.Detection.Path, StringComparer.OrdinalIgnoreCase))
         {
-            OpenDetections.Add(new OpenDetectionRow(d));
+            OpenDetections.Add(row);
         }
+
+        var serious = OpenDetections.Count(r => r.Category == FindingCategory.Serious);
+        OpenSummary = OpenDetections.Count == 0 ? "Keine offenen Funde."
+            : $"{serious} ernst (rot), {OpenDetections.Count - serious} nicht so schlimm (gelb).";
 
         Engine = s.EngineReachable ? $"ClamAV {s.Engine?.EngineVersion ?? "?"} – erreichbar" : "ClamAV-Dienst (clamd) NICHT erreichbar";
         Signatures = s.Engine?.DatabaseVersion is { } v
