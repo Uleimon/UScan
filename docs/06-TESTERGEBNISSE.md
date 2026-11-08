@@ -13,6 +13,10 @@
 
 Testdaten: ausschließlich harmlos. EICAR wird zur Laufzeit zusammengesetzt; ZIP-Bomben bestehen aus Nullbytes; „verdächtige“ PE-Dateien werden im Test synthetisch erzeugt und nie ausgeführt. **Keine echte Malware.**
 
+## Nachtrag Version 0.5.9
+
+Funde werden in der Oberfläche farbig eingestuft (Übersicht „Offene Funde“, Scan-Ergebnisse, Protokoll), die Heuristik-Schwelle bleibt unverändert: **Rot** „ERNST – entfernen“ = von einer Signatur-Engine (ClamAV, Defender-Zweitmeinung) als Schadsoftware erkannt; **Gelb** „Nicht so schlimm – prüfen“ = nur ein Verdacht der Heuristik (UScan oder ClamAV `Heuristics.*`), oft harmlos; **Blau** „Fehlalarm“ = vom Nutzer für genau diesen Dateiinhalt zugelassen; **Grün** „Okay“ = nichts gefunden; **Grau** „Nicht geprüft“ = Fehler, übersprungen oder unvollständig (bewusst nicht grün). Listen sind nach dieser Reihenfolge sortiert. Im Protokoll sind Bedrohungen rot, andere Warnungen und Fehler gelb („Achtung“), Freigaben blau, Info grün. Die Einstufung sagt nicht, dass ein roter Fund sicher Schadsoftware ist – auch Signaturen haben Fehlalarme –, sondern woher der Fund stammt. Grundlage: der erste vollständige Scan auf dem echten PC (2 239 746 Dateien, zweimal fortgesetzt) mit 7 ClamAV-Funden und 21 Heuristik-Verdachtsfällen, meist ältere unsignierte Spiel- und Emulator-Dateien. Tests: Linux 196/196, Windows zusätzlich Einstufung je Ergebnis und Protokollzeile.
+
 ## Nachtrag Version 0.5.8
 
 Neuer Knopf „Pausieren“ auf der Scan-Seite (wird während der Pause zu „Weiter“). In der Pause schickt UScan keine neue Datei mehr an clamd; Dateien, die gerade geprüft werden (höchstens so viele wie parallele Scans), laufen noch zu Ende, und das Durchlaufen der Ordner hält an, sobald seine Warteschlange (1 024 Einträge) voll ist. „Abbrechen“ wirkt auch in der Pause. Wird UScan während der Pause geschlossen oder der PC heruntergefahren, lässt sich der Scan wie seit 0.5.7 mit „Scan fortsetzen“ weiterführen. Kommandozeile und Dateiüberwachung haben keine Pause. Tests: Linux 196/196 (neu: pausierter Scan schickt bis zum Fortsetzen keine Datei; pausierter Scan lässt sich abbrechen).

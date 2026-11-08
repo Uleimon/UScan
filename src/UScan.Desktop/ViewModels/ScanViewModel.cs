@@ -16,6 +16,10 @@ internal sealed class ScanResultRow(FileScanResult result, bool allowedByUser = 
     public string Detail => Result.Verdict == Verdict.Skipped ? $"übersprungen ({Result.SkipReason})"
         : (Result.DetectionName ?? Result.Message ?? "") + (AllowedByUser ? " – von dir als Fehlalarm zugelassen" : "");
     public bool AllowedByUser { get; } = allowedByUser;
+    public FindingCategory Category => Texts.Category(Result.Verdict, AllowedByUser);
+    public string CategoryLabel => Texts.CategoryLabel(Category);
+    public string CategoryBrushKey => Texts.CategoryBrushKey(Category);
+    public string CategoryTextBrushKey => Texts.CategoryTextBrushKey(Category);
     public string Explanation => string.Join(Environment.NewLine, Result.EngineResults.Where(e => e.Verdict != Verdict.Clean && e.Detail is not null).Select(e => $"[{e.EngineId}] {e.Detail}"));
     public bool CanQuarantine => Result.Verdict is Verdict.Infected or Verdict.Suspicious;
     public bool Selected { get => _selected; set => Set(ref _selected, value); }
@@ -209,9 +213,11 @@ internal sealed class ScanViewModel : ObservableObject, IDisposable
             var (report, file) = finished;
 
             var allowed = _host.AllowedHashes();
-            foreach (var f in report.Files.Where(f => f.Verdict != Verdict.Clean).OrderBy(f => f.Verdict))
+            foreach (var row in report.Files.Where(f => f.Verdict != Verdict.Clean)
+                         .Select(f => new ScanResultRow(f, f.Sha256 is not null && allowed.Contains(f.Sha256)))
+                         .OrderBy(r => r.Category).ThenBy(r => r.Path, StringComparer.OrdinalIgnoreCase))
             {
-                Results.Add(new ScanResultRow(f, f.Sha256 is not null && allowed.Contains(f.Sha256)));
+                Results.Add(row);
             }
 
             foreach (var i in report.Issues)

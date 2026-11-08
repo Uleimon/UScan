@@ -250,6 +250,19 @@ internal sealed class MonitorViewModel : ObservableObject, IDisposable
         });
 }
 
+internal sealed class LogRow(SecurityEvent e)
+{
+    public SecurityEvent Event { get; } = e;
+    public DateTimeOffset Time => Event.Time;
+    public string Category => Event.Category;
+    public string Message => Event.Message;
+    public string? Path => Event.Path;
+    public FindingCategory Color => Texts.Category(Event);
+    public string ColorLabel => Texts.LogLabel(Color);
+    public string ColorBrushKey => Texts.CategoryBrushKey(Color);
+    public string ColorTextBrushKey => Texts.CategoryTextBrushKey(Color);
+}
+
 internal sealed class LogViewModel : ObservableObject
 {
     private readonly UScanHost _host;
@@ -260,7 +273,7 @@ internal sealed class LogViewModel : ObservableObject
         RefreshCommand = new RelayCommand(_ => Refresh());
     }
 
-    public ObservableCollection<SecurityEvent> Events { get; } = [];
+    public ObservableCollection<LogRow> Events { get; } = [];
     public RelayCommand RefreshCommand { get; }
 
     public void Refresh()
@@ -268,7 +281,7 @@ internal sealed class LogViewModel : ObservableObject
         Events.Clear();
         foreach (var e in _host.Log.ReadRecent(500).Reverse())
         {
-            Events.Add(e);
+            Events.Add(new LogRow(e));
         }
     }
 }

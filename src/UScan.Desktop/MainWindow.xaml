@@ -54,11 +54,23 @@
                     <Border Style="{StaticResource Card}">
                         <StackPanel>
                             <TextBlock Text="Offene Funde" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                            <TextBlock Text="{Binding OpenSummary}" Margin="0,0,0,6"/>
+                            <WrapPanel Margin="0,0,0,8">
+                                <Border CornerRadius="3" Padding="6,1" Margin="0,0,6,4" Background="{DynamicResource DangerBrush}"><TextBlock Foreground="White" FontWeight="SemiBold" Text="Rot: ernst, von ClamAV/Defender erkannt – entfernen"/></Border>
+                                <Border CornerRadius="3" Padding="6,1" Margin="0,0,6,4" Background="{DynamicResource MinorBrush}"><TextBlock Foreground="{DynamicResource OnMinorBrush}" FontWeight="SemiBold" Text="Gelb: nur Verdacht (Heuristik), nicht so schlimm – prüfen"/></Border>
+                                <Border CornerRadius="3" Padding="6,1" Margin="0,0,6,4" Background="{DynamicResource InfoBrush}"><TextBlock Foreground="White" FontWeight="SemiBold" Text="Blau: von dir als Fehlalarm zugelassen"/></Border>
+                                <Border CornerRadius="3" Padding="6,1" Margin="0,0,6,4" Background="{DynamicResource OkBrush}"><TextBlock Foreground="White" FontWeight="SemiBold" Text="Grün: okay"/></Border>
+                            </WrapPanel>
                             <ItemsControl ItemsSource="{Binding OpenDetections}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <StackPanel Margin="0,0,0,8">
-                                            <TextBlock Text="{Binding Text}" TextWrapping="Wrap"/>
+                                            <DockPanel>
+                                                <Border CornerRadius="3" Padding="6,1" Margin="0,0,8,0" VerticalAlignment="Center" Background="{Binding CategoryBrushKey, Converter={StaticResource KeyToBrush}}">
+                                                    <TextBlock Text="{Binding CategoryLabel}" FontWeight="SemiBold" Foreground="{Binding CategoryTextBrushKey, Converter={StaticResource KeyToBrush}}"/>
+                                                </Border>
+                                                <TextBlock Text="{Binding Text}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                                            </DockPanel>
                                             <WrapPanel>
                                                 <Button Content="In Quarantäne" Command="{Binding DataContext.QuarantineDetectionCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"/>
                                                 <Button Content="Als Fehlalarm zulassen" Command="{Binding DataContext.AllowDetectionCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"/>
@@ -122,7 +134,16 @@
                                     </DataTemplate>
                                 </GridViewColumn.CellTemplate>
                             </GridViewColumn>
-                            <GridViewColumn Header="Ergebnis" Width="150" DisplayMemberBinding="{Binding VerdictText}"/>
+                            <GridViewColumn Header="Einstufung" Width="190">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Border CornerRadius="3" Padding="6,1" Margin="0,0,8,0" VerticalAlignment="Center" Background="{Binding CategoryBrushKey, Converter={StaticResource KeyToBrush}}">
+                                                    <TextBlock Text="{Binding CategoryLabel}" FontWeight="SemiBold" Foreground="{Binding CategoryTextBrushKey, Converter={StaticResource KeyToBrush}}"/>
+                                                </Border>
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+                            <GridViewColumn Header="Ergebnis" Width="130" DisplayMemberBinding="{Binding VerdictText}"/>
                             <GridViewColumn Header="Datei" Width="380" DisplayMemberBinding="{Binding Path}"/>
                             <GridViewColumn Header="Fund / Grund" Width="240">
                                 <GridViewColumn.CellTemplate>
@@ -245,7 +266,15 @@
                     <ListView.View>
                         <GridView>
                             <GridViewColumn Header="Zeit" Width="150" DisplayMemberBinding="{Binding Time, StringFormat='dd.MM.yyyy HH:mm:ss'}"/>
-                            <GridViewColumn Header="Stufe" Width="80" DisplayMemberBinding="{Binding Severity}"/>
+                            <GridViewColumn Header="Stufe" Width="110">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Border CornerRadius="3" Padding="6,1" Margin="0,0,8,0" VerticalAlignment="Center" Background="{Binding ColorBrushKey, Converter={StaticResource KeyToBrush}}">
+                                                    <TextBlock Text="{Binding ColorLabel}" FontWeight="SemiBold" Foreground="{Binding ColorTextBrushKey, Converter={StaticResource KeyToBrush}}"/>
+                                                </Border>
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
                             <GridViewColumn Header="Bereich" Width="100" DisplayMemberBinding="{Binding Category}"/>
                             <GridViewColumn Header="Meldung" Width="420" DisplayMemberBinding="{Binding Message}"/>
                             <GridViewColumn Header="Pfad" Width="300" DisplayMemberBinding="{Binding Path}"/>

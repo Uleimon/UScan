@@ -13,5 +13,7 @@
     <SolidColorBrush x:Key="WarnBrush" Color="#B45309"/>
     <SolidColorBrush x:Key="ActionBrush" Color="#C2410C"/>
     <SolidColorBrush x:Key="DangerBrush" Color="#B91C1C"/>
+    <SolidColorBrush x:Key="MinorBrush" Color="#FACC15"/>
+    <SolidColorBrush x:Key="OnMinorBrush" Color="#1F1600"/>
     <SolidColorBrush x:Key="NeutralBrush" Color="#4B5563"/>
 </ResourceDictionary>
