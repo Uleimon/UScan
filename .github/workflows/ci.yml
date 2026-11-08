@@ -50,7 +50,17 @@ jobs:
         with:
           dotnet-version: '10.0.x'
       - name: ClamAV installieren (Chocolatey)
-        run: choco install clamav -y --no-progress
+        shell: pwsh
+        run: |
+          # The ClamAV download from GitHub sometimes takes longer than Chocolatey's default 30 s.
+          choco config set --name webRequestTimeoutSeconds --value 300
+          foreach ($try in 1..3) {
+            choco install clamav -y --no-progress
+            if ($LASTEXITCODE -eq 0) { exit 0 }
+            Write-Host "Versuch $try fehlgeschlagen, neuer Versuch in 20 s"
+            Start-Sleep -Seconds 20
+          }
+          exit 1
       - name: clamd finden
         shell: pwsh
         run: |
