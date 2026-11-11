@@ -1,0 +1,23 @@
+ClamAV in diesem Ordner
+=======================
+
+Dieser Ordner enthält das unveränderte offizielle Windows-Paket von ClamAV 1.5.4
+(clamav-1.5.4.win.x64.zip von Cisco Talos, SHA-256
+0d9e0228b2674137ea1a2853566c98a0278ad52ab2582c3d6dbd75373848c395), ohne
+Debug-Symbole (.pdb), Entwickler-Dateien (.lib, include) und Handbuch.
+
+ClamAV ist ein eigenständiges Programm unter der GNU General Public License
+Version 2 (siehe COPYING.txt und den Ordner COPYING für die mitgelieferten
+Bibliotheken). UScan spricht mit ClamAV nur über eine lokale Netzwerkverbindung
+(127.0.0.1:3310) und enthält keinen ClamAV-Code.
+
+Quellcode genau dieser Version:
+  https://github.com/Cisco-Talos/clamav/tree/clamav-1.5.4
+  https://github.com/Cisco-Talos/clamav/releases/tag/clamav-1.5.4
+
+Vom UScan-Setup angelegt bzw. geändert:
+  clamd.conf, freshclam.conf      Einstellungen (Port 3310 nur lokal)
+  uscan-managed.txt               Kennzeichen, dass UScan diesen ClamAV verwaltet
+  Dienst "clamd"                  startet mit Windows, startet nach Absturz neu
+  Aufgabe "UScan\ClamAV-Signaturen"  aktualisiert die Signaturen alle 4 Stunden
+  C:\ProgramData\UScan\ClamAV-Datenbank   Signaturen und Protokolle

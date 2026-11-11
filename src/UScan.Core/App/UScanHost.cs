@@ -172,6 +172,12 @@ public sealed class UScanHost
         ScanReport report;
         try
         {
+            if (waitForEngine && !await Engine.PingAsync(ct).ConfigureAwait(false))
+            {
+                // The runner waits up to about 2 minutes, long enough for a just-started service to load.
+                Platform.TryStartEngineService();
+            }
+
             using var background = Settings.LowPriorityScan ? Platform.EnterBackgroundMode() : null;
             ScanPause.Resume();
             report = await CreateRunner(plan.MaxDirectoryDepth, heuristics, secondOpinion, waitForEngine, journal, ScanPause).RunAsync(plan.Roots, progress, ct).ConfigureAwait(false);
@@ -227,7 +233,9 @@ public sealed class UScanHost
     }
 
     public FreshclamUpdater CreateSignatureUpdater() =>
-        new(Settings.FreshclamPath ?? Platform.DefaultFreshclamPath, Settings.FreshclamConfig, null, Log, _time);
+        Platform.ManagedClamAV is { } managed
+            ? new(managed.FreshclamPath, managed.FreshclamConfig, null, Log, _time)
+            : new(Settings.FreshclamPath ?? Platform.DefaultFreshclamPath, Settings.FreshclamConfig, null, Log, _time);
 
     public IReadOnlyList<AllowedFile> AllowList()
     {
@@ -323,6 +331,12 @@ public sealed class UScanHost
     public async Task<StatusSnapshot> GetStatusAsync(bool scanRunning, CancellationToken ct)
     {
         var reachable = await Engine.PingAsync(ct).ConfigureAwait(false);
+        if (!reachable && Platform.TryStartEngineService())
+        {
+            // The service was stopped and has been asked to start; loading the signatures takes a while,
+            // so the status stays "not reachable" until the next refresh finds it running.
+            Log.Append(new SecurityEvent(_time.GetUtcNow(), EventSeverity.Info, "engine", "clamd service was not running; asked Windows to start it."));
+        }
         EngineInfo? info = null;
         if (reachable)
         {

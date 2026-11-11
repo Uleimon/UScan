@@ -34,6 +34,10 @@ public sealed class WindowsPlatformServices : IPlatformServices
     public string DefaultFreshclamPath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "ClamAV", "freshclam.exe");
 
+    public ManagedClamAV? ManagedClamAV => ClamdService.FindManaged(AppContext.BaseDirectory);
+
+    public bool TryStartEngineService() => ClamdService.TryStart();
+
     /// <summary>
     /// Microsoft Defender's own report is authoritative for Defender. If Defender is not active,
     /// another antivirus may be; Windows Security Center lists registered products, but their
