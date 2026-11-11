@@ -3,21 +3,34 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:UScan.Desktop.ViewModels"
         xmlns:local="clr-namespace:UScan.Desktop"
-        Title="UScan" Width="1100" Height="740" MinWidth="820" MinHeight="560"
-        Background="{DynamicResource WindowBrush}" FontFamily="Segoe UI" FontSize="14">
+        Title="UScan" Width="1280" Height="800" MinWidth="900" MinHeight="600"
+        Background="{DynamicResource WindowBrush}" FontFamily="Segoe UI Variable Text, Segoe UI" FontSize="13">
     <Window.Resources>
         <local:ResourceKeyToBrushConverter x:Key="KeyToBrush"/>
         <local:BoolToVisibilityConverter x:Key="BoolToVis"/>
         <local:BoolToVisibilityConverter x:Key="InvBoolToVis" Invert="True"/>
+        <local:EqualsConverter x:Key="Eq"/>
+
+        <!-- Big scan tiles: icon, title, one line what it covers. -->
+        <Style x:Key="ScanTile" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+            <Setter Property="Width" Value="220"/>
+            <Setter Property="Padding" Value="16,14"/>
+            <Setter Property="Margin" Value="0,0,12,12"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+        </Style>
 
         <!-- Übersicht -->
         <DataTemplate DataType="{x:Type vm:DashboardViewModel}">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Margin="24">
-                    <Border CornerRadius="6" Padding="20" Margin="0,0,0,16"
+                    <Border CornerRadius="12" Padding="24,20" Margin="0,0,0,16"
                             Background="{Binding StateBrushKey, Converter={StaticResource KeyToBrush}}">
                         <StackPanel>
-                            <TextBlock Text="{Binding StateText}" FontSize="28" FontWeight="SemiBold" Foreground="White"/>
+                            <DockPanel>
+                                <TextBlock Text="&#xEA18;" FontFamily="{StaticResource Icons}" FontSize="34" Foreground="White" Margin="0,0,14,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding StateText}" FontSize="28" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
+                            </DockPanel>
                             <ItemsControl ItemsSource="{Binding Reasons}" Margin="0,8,0,0">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
@@ -53,7 +66,7 @@
                     </Border>
                     <Border Style="{StaticResource Card}">
                         <StackPanel>
-                            <TextBlock Text="Offene Funde" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                            <TextBlock Text="Offene Funde" Style="{StaticResource CardTitle}"/>
                             <TextBlock Text="{Binding OpenSummary}" Margin="0,0,0,6"/>
                             <WrapPanel Margin="0,0,0,8">
                                 <Border CornerRadius="3" Padding="6,1" Margin="0,0,6,4" Background="{DynamicResource DangerBrush}"><TextBlock Foreground="White" FontWeight="SemiBold" Text="Rot: ernst, von ClamAV/Defender erkannt – entfernen"/></Border>
@@ -100,25 +113,51 @@
                 <StackPanel>
                     <TextBlock Style="{StaticResource Heading}" Text="Scannen"/>
                     <WrapPanel>
-                        <Button Content="Schnellscan" Command="{Binding QuickCommand}" ToolTip="Desktop, Downloads, Temp, AppData und alle Autostart-Programme"/>
-                        <Button Content="Vollständiger Scan" Command="{Binding FullCommand}" ToolTip="Alle festen Laufwerke"/>
-                        <Button Content="Autostart-Scan" Command="{Binding AutostartCommand}" ToolTip="Nur Programme aus Autostart, Diensten und geplanten Aufgaben"/>
-                        <Button Content="Ordner scannen …" Command="{Binding FolderCommand}"/>
+                        <Button Style="{StaticResource ScanTile}" Command="{Binding QuickCommand}">
+                            <StackPanel>
+                                <TextBlock Text="&#xE945;" FontFamily="{StaticResource Icons}" FontSize="26" Foreground="{DynamicResource AccentBrush}"/>
+                                <TextBlock Text="Schnellscan" FontSize="16" FontWeight="Bold" Margin="0,8,0,2"/>
+                                <TextBlock Style="{StaticResource Hint}" Margin="0" Text="Desktop, Downloads, Temp, AppData und alle Autostart-Programme"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource ScanTile}" Command="{Binding FullCommand}">
+                            <StackPanel>
+                                <TextBlock Text="&#xEDA2;" FontFamily="{StaticResource Icons}" FontSize="26" Foreground="{DynamicResource AccentBrush}"/>
+                                <TextBlock Text="Vollständiger Scan" FontSize="16" FontWeight="Bold" Margin="0,8,0,2"/>
+                                <TextBlock Style="{StaticResource Hint}" Margin="0" Text="Alle festen Laufwerke; lässt sich pausieren und später fortsetzen"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource ScanTile}" Command="{Binding AutostartCommand}">
+                            <StackPanel>
+                                <TextBlock Text="&#xE7E8;" FontFamily="{StaticResource Icons}" FontSize="26" Foreground="{DynamicResource AccentBrush}"/>
+                                <TextBlock Text="Autostart-Scan" FontSize="16" FontWeight="Bold" Margin="0,8,0,2"/>
+                                <TextBlock Style="{StaticResource Hint}" Margin="0" Text="Nur Programme aus Autostart, Diensten und geplanten Aufgaben"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource ScanTile}" Command="{Binding FolderCommand}">
+                            <StackPanel>
+                                <TextBlock Text="&#xE8B7;" FontFamily="{StaticResource Icons}" FontSize="26" Foreground="{DynamicResource AccentBrush}"/>
+                                <TextBlock Text="Ordner scannen …" FontSize="16" FontWeight="Bold" Margin="0,8,0,2"/>
+                                <TextBlock Style="{StaticResource Hint}" Margin="0" Text="Einen Ordner deiner Wahl prüfen"/>
+                            </StackPanel>
+                        </Button>
+                    </WrapPanel>
+                    <WrapPanel Visibility="{Binding Running, Converter={StaticResource BoolToVis}}">
                         <Button Content="{Binding PauseLabel}" Command="{Binding PauseCommand}"/>
                         <Button Content="Abbrechen" Command="{Binding CancelCommand}" Style="{StaticResource DangerButton}"/>
                     </WrapPanel>
-                    <Border Visibility="{Binding HasInterrupted, Converter={StaticResource BoolToVis}}" BorderBrush="{DynamicResource ActionBrush}" BorderThickness="2" CornerRadius="4" Padding="10" Margin="0,8,0,0">
+                    <Border Visibility="{Binding HasInterrupted, Converter={StaticResource BoolToVis}}" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource ActionBrush}" BorderThickness="2" CornerRadius="10" Padding="14" Margin="0,8,0,0">
                         <StackPanel>
                             <TextBlock Text="{Binding InterruptedText}" TextWrapping="Wrap"/>
                             <WrapPanel Margin="0,6,0,0">
-                                <Button Content="Scan fortsetzen" Command="{Binding ResumeCommand}"/>
+                                <Button Content="Scan fortsetzen" Command="{Binding ResumeCommand}" Style="{StaticResource Primary}"/>
                                 <Button Content="Verwerfen (Teilbericht speichern)" Command="{Binding DiscardCommand}"/>
                             </WrapPanel>
                         </StackPanel>
                     </Border>
                 </StackPanel>
                 <StackPanel Grid.Row="1" Margin="0,4,0,8">
-                    <ProgressBar Height="10" Minimum="0" Maximum="100" Value="{Binding Progress, Mode=OneWay}"
+                    <ProgressBar Height="8" Minimum="0" Maximum="100" Value="{Binding Progress, Mode=OneWay}"
                                  IsIndeterminate="{Binding ProgressUnknown, Mode=OneWay}" Visibility="{Binding Running, Converter={StaticResource BoolToVis}}"/>
                     <TextBlock Text="{Binding ProgressText}" Margin="0,6,0,0"/>
                     <TextBlock Style="{StaticResource Hint}" Text="Ein Prozentwert erscheint erst, wenn alle Dateien gezählt sind."/>
@@ -298,7 +337,7 @@
                     </Border>
                     <Border Style="{StaticResource Card}">
                         <StackPanel>
-                            <TextBlock Text="Was UScan kann" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                            <TextBlock Text="Was UScan kann" Style="{StaticResource CardTitle}"/>
                             <TextBlock Text="• Dateien, Ordner und Archive mit ClamAV scannen (Schnell-, Voll-, Autostart- und Ordner-Scan)"/>
                             <TextBlock Text="• Heuristik für Programme, Skripte und Office-Makros (Ergebnis höchstens „verdächtig“, mit Begründung)"/>
                             <TextBlock Text="• Zweitmeinung durch Microsoft Defender bei Funden (ohne dass Defender etwas verändert)"/>
@@ -319,21 +358,60 @@
 
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="210"/>
+            <ColumnDefinition Width="92"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
-        <Border Background="{DynamicResource NavBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,1,0">
-            <StackPanel Margin="8,16">
-                <TextBlock Text="UScan" FontSize="24" FontWeight="Bold" Margin="16,0,0,16"/>
-                <Button Style="{StaticResource NavButton}" Content="Übersicht" Command="{Binding NavigateCommand}" CommandParameter="dashboard"/>
-                <Button Style="{StaticResource NavButton}" Content="Scannen" Command="{Binding NavigateCommand}" CommandParameter="scan"/>
-                <Button Style="{StaticResource NavButton}" Content="Quarantäne" Command="{Binding NavigateCommand}" CommandParameter="quarantine"/>
-                <Button Style="{StaticResource NavButton}" Content="Autostart" Command="{Binding NavigateCommand}" CommandParameter="inventory"/>
-                <Button Style="{StaticResource NavButton}" Content="Überwachung" Command="{Binding NavigateCommand}" CommandParameter="monitor"/>
-                <Button Style="{StaticResource NavButton}" Content="Protokoll" Command="{Binding NavigateCommand}" CommandParameter="log"/>
-                <Button Style="{StaticResource NavButton}" Content="Info" Command="{Binding NavigateCommand}" CommandParameter="about"/>
-            </StackPanel>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Sidebar -->
+        <Border Grid.RowSpan="2" Background="{DynamicResource NavBrush}">
+            <DockPanel Margin="8,14">
+                <StackPanel DockPanel.Dock="Top" Margin="0,0,0,18" HorizontalAlignment="Center">
+                    <Border Width="44" Height="44" CornerRadius="12" Background="{DynamicResource AccentGradient}">
+                        <TextBlock Text="&#xEA18;" FontFamily="{StaticResource Icons}" FontSize="24" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <TextBlock Text="UScan" FontWeight="Bold" FontSize="12" HorizontalAlignment="Center" Margin="0,6,0,0"/>
+                </StackPanel>
+                <StackPanel DockPanel.Dock="Bottom">
+                    <RadioButton Style="{StaticResource NavItem}" Content="Protokoll" Tag="&#xE81C;"
+                                 IsChecked="{Binding PageKey, Converter={StaticResource Eq}, ConverterParameter=log}"/>
+                    <RadioButton Style="{StaticResource NavItem}" Content="Info" Tag="&#xE946;"
+                                 IsChecked="{Binding PageKey, Converter={StaticResource Eq}, ConverterParameter=about}"/>
+                </StackPanel>
+                <StackPanel>
+                    <RadioButton Style="{StaticResource NavItem}" Content="Übersicht" Tag="&#xE80F;"
+                                 IsChecked="{Binding PageKey, Converter={StaticResource Eq}, ConverterParameter=dashboard}"/>
+                    <RadioButton Style="{StaticResource NavItem}" Content="Scannen" Tag="&#xE721;"
+                                 IsChecked="{Binding PageKey, Converter={StaticResource Eq}, ConverterParameter=scan}"/>
+                    <RadioButton Style="{StaticResource NavItem}" Content="Quarantäne" Tag="&#xE72E;"
+                                 IsChecked="{Binding PageKey, Converter={StaticResource Eq}, ConverterParameter=quarantine}"/>
+                    <RadioButton Style="{StaticResource NavItem}" Content="Autostart" Tag="&#xE7E8;"
+                                 IsChecked="{Binding PageKey, Converter={StaticResource Eq}, ConverterParameter=inventory}"/>
+                    <RadioButton Style="{StaticResource NavItem}" Content="Überwachung" Tag="&#xE890;"
+                                 IsChecked="{Binding PageKey, Converter={StaticResource Eq}, ConverterParameter=monitor}"/>
+                </StackPanel>
+            </DockPanel>
         </Border>
-        <ContentControl Grid.Column="1" Content="{Binding Page}"/>
+
+        <!-- Page -->
+        <ContentControl Grid.Column="1" Content="{Binding Page}" Focusable="False"/>
+
+        <!-- Status bar: a running scan stays visible (and can be paused or stopped) on every page. -->
+        <Border Grid.Row="1" Grid.Column="1" Background="{DynamicResource NavBrush}" Padding="16,8"
+                Visibility="{Binding Scan.Running, Converter={StaticResource BoolToVis}}">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Style="{StaticResource DangerButton}" Content="Abbrechen" Command="{Binding Scan.CancelCommand}" Margin="8,0,0,0"/>
+                <Button DockPanel.Dock="Right" Content="{Binding Scan.PauseLabel}" Command="{Binding Scan.PauseCommand}" Margin="8,0,0,0"/>
+                <ProgressBar DockPanel.Dock="Right" Width="220" Minimum="0" Maximum="100" Value="{Binding Scan.Progress, Mode=OneWay}"
+                             IsIndeterminate="{Binding Scan.ProgressUnknown, Mode=OneWay}" VerticalAlignment="Center"/>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
+                    <TextBlock FontWeight="SemiBold" Text="Scan läuft"/>
+                    <TextBlock Style="{StaticResource Hint}" Margin="0" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" Text="{Binding Scan.ProgressText}"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
     </Grid>
 </Window>

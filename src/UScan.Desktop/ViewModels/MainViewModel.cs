@@ -5,6 +5,7 @@ namespace UScan.Desktop.ViewModels;
 internal sealed class MainViewModel : ObservableObject
 {
     private object _page;
+    private string _pageKey;
 
     public MainViewModel(UScanHost host, IDialogs dialogs)
     {
@@ -17,27 +18,38 @@ internal sealed class MainViewModel : ObservableObject
         Log = new LogViewModel(host);
         // An interrupted scan is offered for continuing right away.
         _page = Scan.HasInterrupted ? Scan : Dashboard;
-        NavigateCommand = new RelayCommand(p =>
+        _pageKey = Scan.HasInterrupted ? "scan" : "dashboard";
+        NavigateCommand = new RelayCommand(p => Navigate(p as string ?? "dashboard"));
+    }
+
+    /// <summary>The page shown, by name; the sidebar binds to it so the active entry stays highlighted.</summary>
+    public string PageKey
+    {
+        get => _pageKey;
+        set => Navigate(value);
+    }
+
+    private void Navigate(string key)
+    {
+        Page = key switch
         {
-            Page = p switch
-            {
-                "scan" => Scan,
-                "quarantine" => Quarantine,
-                "inventory" => Inventory,
-                "monitor" => Monitor,
-                "log" => Log,
-                "about" => (object)this,
-                _ => Dashboard,
-            };
-            if (Page == Quarantine)
-            {
-                Quarantine.Refresh();
-            }
-            else if (Page == Log)
-            {
-                Log.Refresh();
-            }
-        });
+            "scan" => Scan,
+            "quarantine" => Quarantine,
+            "inventory" => Inventory,
+            "monitor" => Monitor,
+            "log" => Log,
+            "about" => (object)this,
+            _ => Dashboard,
+        };
+        Set(ref _pageKey, key, nameof(PageKey));
+        if (Page == Quarantine)
+        {
+            Quarantine.Refresh();
+        }
+        else if (Page == Log)
+        {
+            Log.Refresh();
+        }
     }
 
     public UScanHost Host { get; }

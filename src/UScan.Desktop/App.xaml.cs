@@ -1,5 +1,4 @@
 using System.Windows;
-using Microsoft.Win32;
 using UScan.Core.App;
 using UScan.Core.Storage;
 using UScan.Desktop.ViewModels;
@@ -44,7 +43,8 @@ public partial class App : Application
             args.Handled = true;
         };
 
-        ApplyTheme(SystemUsesDarkTheme());
+        // Dark look like UCut by default; the Info page can switch to light.
+        ApplyTheme(true);
         var host = new UScanHost(AppPaths.Default, new WindowsPlatformServices());
         _main = new MainViewModel(host, new WpfDialogs());
         var window = new MainWindow { DataContext = _main };
@@ -101,12 +101,5 @@ public partial class App : Application
         IsDark = dark;
         var dictionaries = Current.Resources.MergedDictionaries;
         dictionaries[0] = new ResourceDictionary { Source = new Uri(dark ? "Themes/Dark.xaml" : "Themes/Light.xaml", UriKind.Relative) };
-    }
-
-    /// <summary>Follows the Windows app theme setting (Settings → Personalisation → Colours).</summary>
-    private static bool SystemUsesDarkTheme()
-    {
-        using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
-        return key?.GetValue("AppsUseLightTheme") is int light && light == 0;
     }
 }
