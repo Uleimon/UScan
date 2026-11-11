@@ -1,31 +1,27 @@
 UScan – Kurzanleitung
 =====================
 
-UScan prüft Dateien mit der Scan-Engine ClamAV. ClamAV wird NICHT mitgeliefert
-und muss einmalig separat installiert werden:
+UScan prüft Dateien mit der Scan-Engine ClamAV.
 
-1. ClamAV für Windows herunterladen: https://www.clamav.net/downloads
-   Wichtig: die Datei mit "win.x64" im Namen (nicht arm64, nicht win32).
-2. PowerShell als Administrator öffnen und im ClamAV-Ordner
-   (Standard: C:\Program Files\ClamAV) nacheinander eingeben:
+Mit dem Setup (UScan-...-Setup.exe) ist alles dabei:
+* ClamAV 1.5.4 (offizielles Paket) wird nach "C:\Program Files\UScan\ClamAV"
+  installiert und als Windows-Dienst "clamd" eingerichtet. Der Dienst startet
+  sofort, bei jedem Windows-Start und nach einem Absturz von selbst neu.
+* Die Virensignaturen (über 200 MB) werden beim Installieren geladen und danach
+  alle 4 Stunden automatisch aktualisiert (Aufgabe "UScan\ClamAV-Signaturen").
+  Gespeichert in C:\ProgramData\UScan\ClamAV-Datenbank.
+* Ist clamd einmal aus, startet UScan den Dienst selbst wieder.
+* Ist schon ein anderer ClamAV-Dienst eingerichtet (z. B. aus E:\ClamAV), fragt
+  das Setup, ob es ihn ersetzen soll. Der alte Ordner wird nicht gelöscht.
+* Das Setup braucht einmal Administratorrechte (für den Dienst).
 
-   copy conf_examples\freshclam.conf.sample freshclam.conf
-   (Get-Content freshclam.conf) -replace '^Example','#Example' | Set-Content freshclam.conf
-   "TCPSocket 3310","TCPAddr 127.0.0.1","StreamMaxLength 100M","MaxFileSize 100M","MaxScanSize 400M","MaxFiles 10000","AlertExceedsMax yes","AlertEncrypted yes" | Set-Content -Encoding ascii clamd.conf
-   .\freshclam.exe
-   .\clamd.exe --install-service
-   Set-Service clamd -StartupType Automatic; Start-Service clamd
-   sc.exe failure clamd reset= 86400 actions= restart/5000/restart/5000/restart/5000
-
-   clamd muss immer laufen, solange UScan scannt. Als Dienst passiert das
-   automatisch; ein offenes clamd-Fenster darf nicht geschlossen werden.
-
-3. UScan starten. Die Übersicht zeigt, ob die Engine erreichbar ist und die
-   Signaturen aktuell sind. Grün erscheint nur, wenn alles stimmt.
-
-ClamAV in einem anderen Ordner (z. B. E:\ClamAV)? Dann in
-%LOCALAPPDATA%\UScan\settings.json eintragen:
+ZIP-Paket statt Setup: Die ZIP enthält nur UScan, ohne ClamAV. Dann ClamAV
+selbst installieren (https://www.clamav.net/downloads, Datei mit "win.x64") und
+bei einem anderen Ordner in %LOCALAPPDATA%\UScan\settings.json eintragen:
    { "freshclamPath": "E:\\ClamAV\\freshclam.exe" }
+
+ClamAV steht unter der GPL-Lizenz; Lizenztexte und Link zum Quellcode liegen im
+Ordner ClamAV (ClamAV-QUELLCODE.txt).
 
 Was UScan kann und was nicht
 ----------------------------
@@ -41,7 +37,8 @@ Windows SmartScreen kann deshalb beim ersten Start warnen
 ("Weitere Informationen" -> "Trotzdem ausführen").
 
 Daten (Berichte, Quarantäne, Protokoll): %LOCALAPPDATA%\UScan
-Diese bleiben beim Deinstallieren erhalten.
+Diese bleiben beim Deinstallieren erhalten. Das mitinstallierte ClamAV, der
+Dienst, die Aufgabe und die Signaturen werden beim Deinstallieren entfernt.
 
 Kommandozeile: uscan-cli.exe status | scan quick | scan full | quarantine list ...
 Quellcode und Dokumentation: https://github.com/Uleimon/UScan

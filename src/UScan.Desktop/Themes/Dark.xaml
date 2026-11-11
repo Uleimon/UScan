@@ -1,13 +1,23 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <SolidColorBrush x:Key="WindowBrush" Color="#111318"/>
-    <SolidColorBrush x:Key="SurfaceBrush" Color="#1B1E25"/>
-    <SolidColorBrush x:Key="NavBrush" Color="#16181E"/>
-    <SolidColorBrush x:Key="TextBrush" Color="#E5E7EB"/>
-    <SolidColorBrush x:Key="SubtleTextBrush" Color="#9CA3AF"/>
-    <SolidColorBrush x:Key="LineBrush" Color="#2D323C"/>
-    <SolidColorBrush x:Key="AccentBrush" Color="#3B82F6"/>
+    <!-- Dark look shared with UCut: near-black window, slightly lighter cards. Accent blue-cyan (red stays reserved for threats). -->
+    <SolidColorBrush x:Key="WindowBrush" Color="#0D0E12"/>
+    <SolidColorBrush x:Key="NavBrush" Color="#121318"/>
+    <SolidColorBrush x:Key="SurfaceBrush" Color="#191A21"/>
+    <SolidColorBrush x:Key="Surface2Brush" Color="#22242D"/>
+    <SolidColorBrush x:Key="HoverBrush" Color="#2A2C37"/>
+    <SolidColorBrush x:Key="LineBrush" Color="#2E303B"/>
+    <SolidColorBrush x:Key="TextBrush" Color="#F2F3F5"/>
+    <SolidColorBrush x:Key="SubtleTextBrush" Color="#9A9DAB"/>
+    <SolidColorBrush x:Key="AccentBrush" Color="#38BDF8"/>
+    <SolidColorBrush x:Key="AccentSoftBrush" Color="#3338BDF8"/>
     <SolidColorBrush x:Key="OnAccentBrush" Color="#FFFFFF"/>
+    <LinearGradientBrush x:Key="AccentGradient" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#2563EB" Offset="0"/>
+        <GradientStop Color="#06B6D4" Offset="1"/>
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="DangerSoftBrush" Color="#3A1A1D"/>
+    <SolidColorBrush x:Key="OnDangerSoftBrush" Color="#FCA5A5"/>
     <SolidColorBrush x:Key="OkBrush" Color="#16A34A"/>
     <SolidColorBrush x:Key="InfoBrush" Color="#2563EB"/>
     <SolidColorBrush x:Key="WarnBrush" Color="#B45309"/>
