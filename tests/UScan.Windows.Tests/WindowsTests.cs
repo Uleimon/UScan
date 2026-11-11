@@ -139,6 +139,29 @@ public sealed class HeuristicFalsePositiveTests
     }
 
     [Fact]
+    public void ClamAV_from_the_setup_is_only_used_when_the_setup_marked_it()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "uscan-managed-" + Guid.NewGuid().ToString("N"));
+        var clam = Directory.CreateDirectory(Path.Combine(dir, "ClamAV")).FullName;
+        try
+        {
+            File.WriteAllText(Path.Combine(clam, "freshclam.exe"), "");
+            File.WriteAllText(Path.Combine(clam, "freshclam.conf"), "");
+            Assert.Null(ClamdService.FindManaged(dir));
+
+            File.WriteAllText(Path.Combine(clam, ClamdService.ManagedMarker), "");
+            var managed = ClamdService.FindManaged(dir);
+            Assert.NotNull(managed);
+            Assert.Equal(Path.Combine(clam, "freshclam.exe"), managed.FreshclamPath);
+            Assert.Equal(Path.Combine(clam, "freshclam.conf"), managed.FreshclamConfig);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Background_mode_is_entered_once_and_left_when_the_last_scan_ends()
     {
         using (var first = BackgroundMode.Enter())
